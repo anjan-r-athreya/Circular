@@ -14,6 +14,7 @@ class MapViewModel: ObservableObject {
     @Published var position: MapCameraPosition = .userLocation(fallback: .automatic)
     @Published var actualMiles: Double?
     @Published var isFavorited: Bool = false
+    @Published var isDirectionsActive: Bool = false
 }
 
 struct ContentView: View {
@@ -26,6 +27,13 @@ struct ContentView: View {
     @State private var logoYOffset: CGFloat = -60
     @State private var logoOpacity: Double = 0.3
     @State private var showingFavorites = false
+    @State private var routeCoordinates: [CLLocationCoordinate2D] = []
+    @Binding var selectedFavoriteRoute: Route?
+    
+    // Initialize with an optional binding - required for using within MainTabView
+    init(selectedFavoriteRoute: Binding<Route?> = .constant(nil)) {
+        self._selectedFavoriteRoute = selectedFavoriteRoute
+    }
     
     var body: some View {
         ZStack {
@@ -56,6 +64,25 @@ struct ContentView: View {
                 if let loc = manager.location?.coordinate {
                     userLocation = loc
                 }
+                
+                // Check if we have a route to load from favorites
+                if let route = selectedFavoriteRoute {
+                    loadFavoriteRoute(route)
+                    
+                    // Reset the binding - this is important so it won't reload the same route again
+                    DispatchQueue.main.async {
+                        selectedFavoriteRoute = nil
+                    }
+                }
+            }
+            .onChange(of: selectedFavoriteRoute) { newRoute in
+                if let route = newRoute {
+                    loadFavoriteRoute(route)
+                    // Reset after loading
+                    DispatchQueue.main.async {
+                        selectedFavoriteRoute = nil
+                    }
+                }
             }
             .onTapGesture {
                 if !isLoading {
@@ -66,37 +93,48 @@ struct ContentView: View {
             
             // Controls overlay
             VStack {
-                // Top menu button with circular background
-                HStack {
-                    Button(action: {
-                        showingFavorites = true
-                    }) {
-                        Image(systemName: "line.3.horizontal")
-                            .foregroundColor(.white)
-                            .font(.system(size: 24))
-                            .padding(12)
-                            .background(Color(uiColor: MapOverlayStyle.polylineColor))
-                            .clipShape(Circle())
-                    }
-                    .padding()
-                    Spacer()
-                }
-                
                 Spacer()
                 
                 // Bottom controls
                 VStack(spacing: 12) {
                     if viewModel.routePolyline != nil && !isLoading {
-                        Button(action: {
-                            viewModel.isFavorited.toggle()
-                        }) {
-                            Image(systemName: viewModel.isFavorited ? "star.fill" : "star")
-                                .foregroundColor(.yellow)
-                                .font(.system(size: 24))
+                        HStack(spacing: 20) {
+                            // Favorite button
+                            Button(action: {
+                                viewModel.isFavorited.toggle()
+                                
+                                if viewModel.isFavorited {
+                                    // Save route to favorites
+                                    saveRouteToFavorites()
+                                } else {
+                                    // Remove from favorites if unfavorited
+                                    removeRouteFromFavorites()
+                                }
+                            }) {
+                                Image(systemName: viewModel.isFavorited ? "star.fill" : "star")
+                                    .foregroundColor(.yellow)
+                                    .font(.system(size: 24))
+                            }
+                            
+                            // Go button
+                            Button(action: {
+                                viewModel.isDirectionsActive.toggle()
+                                // Here you'd integrate with turn-by-turn navigation
+                            }) {
+                                Label("Go", systemImage: "arrow.triangle.turn.up.right.circle.fill")
+                                    .font(.headline)
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 8)
+                                    .background(Color.green)
+                                    .cornerRadius(20)
+                                    .shadow(radius: 3)
+                            }
                         }
                     }
 
                     TextField("Route Mileage:", text: $mileage)
+                        .keyboardType(.numberPad)
                         .textFieldStyle(.roundedBorder)
                         .background(.ultraThinMaterial)
                     
@@ -115,15 +153,24 @@ struct ContentView: View {
                         
                         isLoading = true
                         viewModel.isFavorited = false // Reset favorite state when generating new route
+                        viewModel.isDirectionsActive = false // Reset directions state
                         
                         if isCircularRoute {
-                            LoopGeneration.shared.generateCircularRoute(from: start, targetMiles: miles, viewModel: viewModel, completion: {
+                            LoopGeneration.shared.generateCircularRoute(from: start, targetMiles: miles, viewModel: viewModel) {
+                                // Store route coordinates for favorites
+                                if let polyline = viewModel.routePolyline {
+                                    storeRouteCoordinates(from: polyline)
+                                }
                                 isLoading = false
-                            })
+                            }
                         } else {
-                            RouteManager.shared.generateRouteWithTargetDistance(from: start, targetMiles: miles, viewModel: viewModel, completion: {
+                            RouteManager.shared.generateRouteWithTargetDistance(from: start, targetMiles: miles, viewModel: viewModel) {
+                                // Store route coordinates for favorites
+                                if let polyline = viewModel.routePolyline {
+                                    storeRouteCoordinates(from: polyline)
+                                }
                                 isLoading = false
-                            })
+                            }
                         }
                     }
                     .buttonStyle(.borderedProminent)
@@ -136,8 +183,52 @@ struct ContentView: View {
                             .padding(.horizontal, 8)
                             .background(.ultraThinMaterial)
                     }
+                    
                 }
                 .padding()
+            }
+            
+            // Navigation mode overlay
+            if viewModel.isDirectionsActive, let polyline = viewModel.routePolyline {
+                VStack {
+                    HStack {
+                        Spacer()
+                        Button(action: {
+                            viewModel.isDirectionsActive = false
+                        }) {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.title)
+                                .foregroundColor(.white)
+                                .padding()
+                        }
+                    }
+                    
+                    Spacer()
+                    
+                    // Navigation instructions card
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack {
+                            Image(systemName: "arrow.up")
+                                .font(.title)
+                                .foregroundColor(.blue)
+                                .frame(width: 40, height: 40)
+                                .background(Circle().fill(.white))
+                            
+                            VStack(alignment: .leading) {
+                                Text("Start navigation")
+                                    .font(.headline)
+                                Text("Follow route for \(String(format: "%.2f", totalDistance(of: polyline))) miles")
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                            }
+                            
+                            Spacer()
+                        }
+                        .padding()
+                        .background(RoundedRectangle(cornerRadius: 12).fill(.ultraThinMaterial))
+                    }
+                    .padding()
+                }
             }
             
             // Loading overlay
@@ -160,6 +251,12 @@ struct ContentView: View {
                             }
                         }
                     
+                    Color.clear
+                        .onAppear {
+                            isSearchFieldFocused  = false
+                        }
+                        .ignoresSafeArea()
+                    
                     VStack {
                         ProgressView()
                             .progressViewStyle(CircularProgressViewStyle(tint: .white))
@@ -181,8 +278,77 @@ struct ContentView: View {
             }
         }
         .sheet(isPresented: $showingFavorites) {
-            FavoritesView()
+            FavoritesView(onRouteSelected: { route in
+                loadFavoriteRoute(route)
+            })
         }
+    }
+    
+    // Load a route from favorites
+    private func loadFavoriteRoute(_ route: Route) {
+        guard !route.path.isEmpty else { return }
+        
+        isLoading = true
+        
+        // Create a polyline from the route's path
+        let polyline = MKPolyline(coordinates: route.path, count: route.path.count)
+        
+        // Update the viewModel
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            self.viewModel.routePolyline = polyline
+            self.viewModel.position = .region(MKCoordinateRegion(polyline.boundingMapRect))
+            self.viewModel.actualMiles = totalDistance(of: polyline)
+            self.viewModel.isFavorited = true // Mark as favorited since it came from favorites
+            self.storeRouteCoordinates(from: polyline)
+            self.isLoading = false
+        }
+        
+        // Update the mileage text field
+        let miles = totalDistance(of: polyline)
+        self.mileage = String(format: "%.1f", miles)
+    }
+    
+    // Convert MKPolyline to array of CLLocationCoordinate2D
+    private func storeRouteCoordinates(from polyline: MKPolyline) {
+        let pointCount = polyline.pointCount
+        var coordinates: [CLLocationCoordinate2D] = []
+        
+        let points = polyline.points()
+        for i in 0..<pointCount {
+            let mapPoint = points[i]
+            coordinates.append(mapPoint.coordinate)
+        }
+        
+        self.routeCoordinates = coordinates
+    }
+    
+    // Save the current route to favorites
+    private func saveRouteToFavorites() {
+        guard !routeCoordinates.isEmpty, let miles = viewModel.actualMiles else {
+            print("No route to save")
+            return
+        }
+        
+        let routeName = "Route \(String(format: "%.2f", miles)) miles"
+        RouteManager.shared.saveAsFavorite(name: routeName, coordinates: routeCoordinates)
+        
+        // Show feedback to user
+        let generator = UINotificationFeedbackGenerator()
+        generator.notificationOccurred(.success)
+    }
+    
+    // Remove the current route from favorites
+    private func removeRouteFromFavorites() {
+        guard !routeCoordinates.isEmpty, let miles = viewModel.actualMiles else {
+            return
+        }
+        
+        let routeName = "Route \(String(format: "%.2f", miles)) miles"
+        RouteManager.shared.removeFromFavorites(name: routeName, coordinates: routeCoordinates)
+        
+        // Show feedback to user
+        let generator = UINotificationFeedbackGenerator()
+        generator.notificationOccurred(.success)
     }
 }
 
