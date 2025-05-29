@@ -428,8 +428,10 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = CircleRun/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Circular;
 				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "Show the real time user location";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Show the real time user location";
+				INFOPLIST_KEY_NSMotionUsageDescription = "Get physical activity data";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -461,8 +463,10 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = CircleRun/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Circular;
 				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "Show the real time user location";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Show the real time user location";
+				INFOPLIST_KEY_NSMotionUsageDescription = "Get physical activity data";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;

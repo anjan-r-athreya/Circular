@@ -28,12 +28,7 @@ struct ContentView: View {
     @State private var logoOpacity: Double = 0.3
     @State private var showingFavorites = false
     @State private var routeCoordinates: [CLLocationCoordinate2D] = []
-    @Binding var selectedFavoriteRoute: Route?
-    
-    // Initialize with an optional binding - required for using within MainTabView
-    init(selectedFavoriteRoute: Binding<Route?> = .constant(nil)) {
-        self._selectedFavoriteRoute = selectedFavoriteRoute
-    }
+    @State private var selectedFavoriteRoute: Route?
     
     var body: some View {
         ZStack {
@@ -65,13 +60,10 @@ struct ContentView: View {
                     userLocation = loc
                 }
                 
-                // Check if we have a route to load from favorites
-                if let route = selectedFavoriteRoute {
-                    loadFavoriteRoute(route)
-                    
-                    // Reset the binding - this is important so it won't reload the same route again
-                    DispatchQueue.main.async {
-                        selectedFavoriteRoute = nil
+                // Set up notification observer for loading favorite routes
+                NotificationCenter.default.addObserver(forName: Notification.Name("LoadFavoriteRoute"), object: nil, queue: .main) { notification in
+                    if let route = notification.object as? Route {
+                        loadFavoriteRoute(route)
                     }
                 }
             }
@@ -278,9 +270,7 @@ struct ContentView: View {
             }
         }
         .sheet(isPresented: $showingFavorites) {
-            FavoritesView(onRouteSelected: { route in
-                loadFavoriteRoute(route)
-            })
+            FavoritesView()
         }
     }
     

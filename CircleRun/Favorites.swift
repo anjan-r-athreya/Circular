@@ -1,15 +1,12 @@
 import SwiftUI
 import MapKit
 
-import SwiftUI
-
 struct FavoritesView: View {
     @StateObject private var viewModel = FavoritesViewModel()
-    @Environment(\.presentationMode) var presentationMode
-    var onRouteSelected: ((Route) -> Void)?
+    @Environment(\.dismiss) var dismiss
     
     var body: some View {
-        NavigationView {
+        NavigationStack {
             ZStack {
                 // Background
                 Color(.systemGroupedBackground)
@@ -21,27 +18,19 @@ struct FavoritesView: View {
                 } else if viewModel.favorites.isEmpty {
                     emptyStateView
                 } else {
-                    scrollableContentView
+                    ScrollView {
+                        LazyVStack(spacing: 12) {
+                            ForEach(viewModel.favorites) { route in
+                                RouteCardView(route: route, viewModel: viewModel)
+                            }
+                        }
+                        .padding(.vertical, 8)
+                    }
                 }
             }
             .navigationTitle("Favorites")
             .refreshable {
                 viewModel.loadFavorites()
-            }
-        }
-    }
-    
-    private var scrollableContentView: some View {
-        ScrollView {
-            LazyVStack(spacing: 12) {
-                ForEach(viewModel.favorites) { route in
-                    RouteCardView(route: route, viewModel: viewModel, onRouteTapped: { selectedRoute in
-                        // Call the closure and dismiss this sheet
-                        onRouteSelected?(selectedRoute)
-                        presentationMode.wrappedValue.dismiss()
-                    })
-                }
-                .padding(.vertical, 8)
             }
         }
     }
@@ -65,29 +54,8 @@ struct FavoritesView: View {
     }
 }
 
-struct FavoritesView_Previews: PreviewProvider {
-    static var previews: some View {
-        TabView {
-            FavoritesView()
-                .tabItem {
-                    Label("Favorites", systemImage: "star.fill")
-                }
-        }
-        
-        // Preview the empty state
-        TabView {
-            FavoritesView(viewModel: {
-                let vm = FavoritesViewModel()
-                vm.favorites = []
-                vm.isLoading = false
-                return vm
-            }())
-                .tabItem {
-                    Label("Favorites", systemImage: "star.fill")
-                }
-        }
-        .preferredColorScheme(.dark)
-    }
+#Preview {
+    FavoritesView()
 }
 
 // Extension for preview purposes only

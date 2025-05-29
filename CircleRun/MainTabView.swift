@@ -8,13 +8,12 @@
 import SwiftUI
 
 struct MainTabView: View {
-    @State private var selectedFavoriteRoute: Route?
     @State private var selectedTab: Int = 0
     
     var body: some View {
         TabView(selection: $selectedTab) {
             // Home tab with ContentView
-            ContentView(selectedFavoriteRoute: $selectedFavoriteRoute)
+            ContentView()
                 .tabItem {
                     Label("Home", systemImage: "house.fill")
                 }
@@ -28,14 +27,11 @@ struct MainTabView: View {
                 .tag(1)
             
             // Favorites tab with the complete FavoritesView
-            FavoritesView(onRouteSelected: { route in
-                selectedFavoriteRoute = route
-                selectedTab = 0 // Switch to home tab
-            })
-            .tabItem {
-                Label("Favorites", systemImage: "star.fill")
-            }
-            .tag(2)
+            FavoritesView()
+                .tabItem {
+                    Label("Favorites", systemImage: "star.fill")
+                }
+                .tag(2)
             
             // Profile tab
             Text("Profile View")
