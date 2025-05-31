@@ -109,7 +109,7 @@ class RouteManager {
 //    func generateLoop(from start: CLLocationCoordinate2D, polygonSides: Int = 6, targetMiles: Double, viewModel: MapViewModel) {
 //        // Initial distance estimate (will be adjusted by binary search)
 //        let radiusEstimate = targetMiles * 0.3 // Start with radius ~30% of total desired distance
-//        
+//
 //        // Create waypoints in a rough circle
 //        var waypoints: [CLLocationCoordinate2D] = []
 //        for i in 0..<polygonSides {
@@ -119,11 +119,11 @@ class RouteManager {
 //            let waypoint = offsetCoordinate(from: start, metersEast: waypointEast, metersNorth: waypointNorth)
 //            waypoints.append(waypoint)
 //        }
-//        
+//
 //        // Now implement binary search to adjust the radius until the total route matches target distance
 //        // [Binary search implementation would go here]
 //    }
-//    
+//
     // Add a method to save a route as favorite
     func saveAsFavorite(name: String, coordinates: [CLLocationCoordinate2D], runTime: TimeInterval = 0) {
         // Create a new Route object
@@ -132,7 +132,8 @@ class RouteManager {
             name: name,
             path: coordinates,
             runCount: 1,
-            bestTime: runTime
+            bestTime: runTime,
+            distance: calculateRouteDistance(coordinates: coordinates)  // Calculate actual distance
         )
         
         // Check if this route already exists to prevent duplicates
@@ -213,12 +214,26 @@ class RouteManager {
         
         UserDefaults.standard.set(savedData, forKey: "savedFavorites")
     }
+    
+    // Helper method to calculate route distance
+    private func calculateRouteDistance(coordinates: [CLLocationCoordinate2D]) -> Double {
+        var totalDistance: CLLocationDistance = 0
+        guard coordinates.count > 1 else { return 0 }
+        
+        for i in 0..<(coordinates.count - 1) {
+            let loc1 = CLLocation(latitude: coordinates[i].latitude, longitude: coordinates[i].longitude)
+            let loc2 = CLLocation(latitude: coordinates[i + 1].latitude, longitude: coordinates[i + 1].longitude)
+            totalDistance += loc1.distance(from: loc2)
+        }
+        
+        return totalDistance / 1609.34 // Convert meters to miles
+    }
 }
 
 // Make Route conform to Codable if it isn't already
 extension Route: Codable {
     enum CodingKeys: String, CodingKey {
-        case id, name, runCount, bestTime
+        case id, name, runCount, bestTime, distance
         case path
     }
     
@@ -228,6 +243,7 @@ extension Route: Codable {
         name = try container.decode(String.self, forKey: .name)
         runCount = try container.decode(Int.self, forKey: .runCount)
         bestTime = try container.decode(TimeInterval.self, forKey: .bestTime)
+        distance = try container.decode(Double.self, forKey: .distance)
         
         // Decode coordinates from custom format
         let coordinateData = try container.decode([String: Double].self, forKey: .path)
@@ -249,6 +265,7 @@ extension Route: Codable {
         try container.encode(name, forKey: .name)
         try container.encode(runCount, forKey: .runCount)
         try container.encode(bestTime, forKey: .bestTime)
+        try container.encode(distance, forKey: .distance)
         
         // Encode coordinates in a format that can be stored
         var coordinateData: [String: Double] = [:]

@@ -86,14 +86,16 @@ class WatchConnectivityManager: NSObject, ObservableObject, WCSessionDelegate {
 
 struct AppleWatchView: View {
     @StateObject private var watchManager = WatchConnectivityManager()
+    @StateObject private var navigationManager = NavigationManager()
     @State private var selectedRoute: Route?
     @State private var showingRoutePicker = false
+    @State private var showingNavigation = false
 
     // Use existing sample data from Route.swift
     private let availableRoutes = Route.samples
 
     var body: some View {
-        NavigationView {
+        NavigationStack {
             ScrollView {
                 VStack(spacing: 24) {
                     // Connection status + last sent feedback
@@ -125,16 +127,30 @@ struct AppleWatchView: View {
                                 SimpleRouteCardView(route: route)
                                     .onTapGesture { showingRoutePicker = true }
 
-                                Button {
-                                    watchManager.sendRouteToWatch(route)
-                                } label: {
-                                    Label("Send to Watch", systemImage: "arrow.up.circle.fill")
-                                        .font(.headline)
-                                        .foregroundColor(.white)
-                                        .frame(maxWidth: .infinity)
-                                        .padding()
-                                        .background(Color.blue)
-                                        .cornerRadius(12)
+                                HStack(spacing: 16) {
+                                    Button {
+                                        watchManager.sendRouteToWatch(route)
+                                    } label: {
+                                        Label("Send to Watch", systemImage: "arrow.up.circle.fill")
+                                            .font(.headline)
+                                            .foregroundColor(.white)
+                                            .frame(maxWidth: .infinity)
+                                            .padding()
+                                            .background(Color.blue)
+                                            .cornerRadius(12)
+                                    }
+                                    
+                                    Button {
+                                        showingNavigation = true
+                                    } label: {
+                                        Label("Start Run", systemImage: "figure.run")
+                                            .font(.headline)
+                                            .foregroundColor(.white)
+                                            .frame(maxWidth: .infinity)
+                                            .padding()
+                                            .background(Color.green)
+                                            .cornerRadius(12)
+                                    }
                                 }
                             } else {
                                 Button {
@@ -167,7 +183,7 @@ struct AppleWatchView: View {
                         VStack(alignment: .leading, spacing: 16) {
                             Text("Setup Instructions")
                                 .font(.title2).fontWeight(.semibold)
-                            SetupStep(number: "1", title: "Pair Your Apple Watch", description: "Ensure it’s paired in the iPhone Watch app")
+                            SetupStep(number: "1", title: "Pair Your Apple Watch", description: "Ensure it's paired in the iPhone Watch app")
                             SetupStep(number: "2", title: "Install Watch App",      description: "Build & run using the paired simulator scheme")
                             SetupStep(number: "3", title: "Enable Permissions",     description: "Allow location & health data access")
                         }
@@ -180,7 +196,7 @@ struct AppleWatchView: View {
             }
             .navigationTitle("Apple Watch")
             .sheet(isPresented: $showingRoutePicker) {
-                NavigationView {
+                NavigationStack {
                     List(availableRoutes) { route in
                         SimpleRouteCardView(route: route)
                             .onTapGesture {
@@ -194,6 +210,13 @@ struct AppleWatchView: View {
                             Button("Cancel") { showingRoutePicker = false }
                         }
                     }
+                }
+            }
+        }
+        .sheet(isPresented: $showingNavigation) {
+            if let route = selectedRoute {
+                NavigationStack {
+                    NavigationInterface(route: route)
                 }
             }
         }

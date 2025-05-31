@@ -15,177 +15,122 @@ struct NavigationInterface: View {
     @Environment(\.dismiss) private var dismiss
     
     var body: some View {
-        GeometryReader { geometry in
-            ZStack(alignment: .top) {
-                // Map Layer
-                MapLayer(route: route, navigationManager: navigationManager)
-                    .ignoresSafeArea()
+        ZStack(alignment: .top) {
+            // 3D Map View
+            MapViewRepresentable(navigationManager: navigationManager)
+                .ignoresSafeArea()
+            
+            // Top Navigation Banner
+            VStack(spacing: 0) {
+                if let instruction = navigationManager.currentInstruction {
+                    HStack(alignment: .center, spacing: 16) {
+                        // Distance to next turn
+                        Text(instruction.distance)
+                            .font(.system(size: 34, weight: .bold))
+                            .foregroundColor(.white)
+                        
+                        Spacer()
+                        
+                        // Turn arrows
+                        HStack(spacing: 4) {
+                            ForEach(0..<5) { index in
+                                Image(systemName: getTurnArrowSystemName(for: instruction.maneuverType, at: index))
+                                    .font(.system(size: 28, weight: .medium))
+                                    .foregroundColor(index < 3 ? .gray : .white)
+                            }
+                        }
+                    }
+                    .padding(.horizontal)
+                    .padding(.top, 8)
+                    
+                    // Street name
+                    if let streetName = instruction.streetName {
+                        Text(streetName)
+                            .font(.system(size: 20, weight: .medium))
+                            .foregroundColor(.white)
+                            .padding(.horizontal)
+                            .padding(.bottom, 8)
+                    }
+                }
+            }
+            .background(Color.black.opacity(0.75))
+            
+            // Bottom Stats Banner
+            VStack {
+                Spacer()
                 
-                // Navigation Overlays
-                VStack(spacing: 0) {
-                    if let currentInstruction = navigationManager.currentInstruction {
-                        InstructionBanner(instruction: currentInstruction)
-                            .transition(.move(edge: .top))
+                HStack(spacing: 20) {
+                    // ETA/Arrival time
+                    VStack(alignment: .leading) {
+                        Text(navigationManager.runningStats.estimatedFinishTime)
+                            .font(.system(size: 24, weight: .bold))
+                        Text("arrival")
+                            .font(.system(size: 14))
+                            .foregroundColor(.gray)
                     }
                     
                     Spacer()
                     
-                    // Stats Panel
-                    NavigationStatsPanel(stats: navigationManager.runningStats)
-                        .padding(.horizontal)
-                        .padding(.bottom, geometry.safeAreaInsets.bottom)
+                    // Remaining time
+                    VStack(alignment: .center) {
+                        Text(navigationManager.runningStats.elapsedTime)
+                            .font(.system(size: 24, weight: .bold))
+                        Text("min")
+                            .font(.system(size: 14))
+                            .foregroundColor(.gray)
+                    }
+                    
+                    Spacer()
+                    
+                    // Remaining distance
+                    VStack(alignment: .trailing) {
+                        Text(navigationManager.runningStats.remainingDistance)
+                            .font(.system(size: 24, weight: .bold))
+                        Text("mi")
+                            .font(.system(size: 14))
+                            .foregroundColor(.gray)
+                    }
                 }
+                .padding()
+                .background(Color.black.opacity(0.75))
+            }
+            
+            // End Navigation Button
+            VStack {
+                HStack {
+                    Spacer()
+                    Button(action: {
+                        navigationManager.stopNavigation()
+                        dismiss()
+                    }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 32))
+                            .foregroundColor(.white)
+                            .padding()
+                    }
+                }
+                Spacer()
             }
         }
         .onAppear {
             navigationManager.startNavigation(for: route)
         }
-        .onDisappear {
-            navigationManager.stopNavigation()
-        }
-    }
-}
-
-// MARK: - Map Layer
-private struct MapLayer: View {
-    let route: Route
-    @ObservedObject var navigationManager: NavigationManager
-    @State private var region: MKCoordinateRegion
-    
-    init(route: Route, navigationManager: NavigationManager) {
-        self.route = route
-        self.navigationManager = navigationManager
-        
-        // Initialize map region
-        _region = State(initialValue: MKCoordinateRegion(
-            center: route.path.first ?? CLLocationCoordinate2D(),
-            span: MKCoordinateSpan(latitudeDelta: 0.005, longitudeDelta: 0.005)
-        ))
     }
     
-    var body: some View {
-        Map(coordinateRegion: $region,
-            showsUserLocation: true,
-            userTrackingMode: .constant(.followWithHeading),
-            annotationItems: navigationManager.turnPoints.indices.map { TurnPointWrapper(id: $0, turnPoint: navigationManager.turnPoints[$0]) }) { wrapper in
-                MapAnnotation(coordinate: wrapper.turnPoint.coordinate) {
-                    TurnIndicator(
-                        direction: wrapper.turnPoint.direction,
-                        distance: wrapper.turnPoint.distance,
-                        isNext: wrapper.id == navigationManager.nextTurnIndex
-                    )
-                }
+    private func getTurnArrowSystemName(for maneuverType: String, at index: Int) -> String {
+        if index < 3 {
+            return "arrow.up.circle.fill"
+        } else if index == 3 {
+            switch maneuverType {
+            case "turn.right":
+                return "arrow.turn.up.right.circle.fill"
+            case "turn.left":
+                return "arrow.turn.up.left.circle.fill"
+            default:
+                return "arrow.up.circle.fill"
             }
-    }
-}
-
-// Helper struct to make turn points identifiable for Map annotations
-private struct TurnPointWrapper: Identifiable {
-    let id: Int
-    let turnPoint: TurnPoint
-}
-
-// MARK: - Instruction Banner
-private struct InstructionBanner: View {
-    let instruction: NavigationInstruction
-    
-    var body: some View {
-        VStack(spacing: 4) {
-            HStack {
-                Text(instruction.text)
-                    .font(.title3)
-                    .bold()
-                Spacer()
-                Text(instruction.distance)
-                    .font(.headline)
-            }
-            .padding()
-            .background(.ultraThinMaterial)
-        }
-        .background(.ultraThinMaterial)
-    }
-}
-
-// MARK: - Navigation Stats Panel
-private struct NavigationStatsPanel: View {
-    @State private var stats: RunningStats
-    @Environment(\.dismiss) private var dismiss
-    
-    init(stats: RunningStats) {
-        _stats = State(initialValue: stats)
-    }
-    
-    var body: some View {
-        VStack(spacing: 16) {
-            // Stats Grid
-            LazyVGrid(columns: [
-                GridItem(.flexible()),
-                GridItem(.flexible()),
-                GridItem(.flexible())
-            ], spacing: 16) {
-                StatItem(title: "PACE", value: stats.currentPace)
-                StatItem(title: "TIME", value: stats.elapsedTime)
-                StatItem(title: "DISTANCE", value: stats.distanceCovered)
-            }
-            
-            // Control Buttons
-            HStack(spacing: 20) {
-                Button(action: { dismiss() }) {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.title)
-                        .foregroundColor(.gray)
-                }
-                
-                Spacer()
-                
-                Button(action: { stats.isPaused.toggle() }) {
-                    Image(systemName: stats.isPaused ? "play.circle.fill" : "pause.circle.fill")
-                        .font(.title)
-                        .foregroundColor(.blue)
-                }
-            }
-            .padding(.horizontal)
-        }
-        .padding()
-        .background(.ultraThinMaterial)
-        .cornerRadius(16)
-    }
-}
-
-// MARK: - Supporting Views
-private struct StatItem: View {
-    let title: String
-    let value: String
-    
-    var body: some View {
-        VStack(spacing: 4) {
-            Text(title)
-                .font(.caption)
-                .foregroundColor(.secondary)
-            Text(value)
-                .font(.headline)
-        }
-    }
-}
-
-private struct TurnIndicator: View {
-    let direction: String
-    let distance: String
-    let isNext: Bool
-    
-    var body: some View {
-        VStack {
-            Image(systemName: "arrow.right.circle.fill")
-                .font(.title2)
-                .foregroundColor(isNext ? .blue : .gray)
-                .rotationEffect(.degrees(direction == "right" ? 0 : 180))
-            if isNext {
-                Text(distance)
-                    .font(.caption)
-                    .padding(4)
-                    .background(.ultraThinMaterial)
-                    .cornerRadius(4)
-            }
+        } else {
+            return maneuverType == "turn.right" ? "arrow.right.circle.fill" : "arrow.left.circle.fill"
         }
     }
 }
@@ -193,4 +138,4 @@ private struct TurnIndicator: View {
 // MARK: - Preview
 #Preview {
     NavigationInterface(route: Route.sample())
-}
+} 

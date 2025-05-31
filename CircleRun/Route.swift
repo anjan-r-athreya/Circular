@@ -15,12 +15,14 @@ struct Route: Identifiable, Hashable {
     let path: [CLLocationCoordinate2D]
     let runCount: Int
     let bestTime: TimeInterval
+    let distance: Double  // in miles
     
     // Convenience initializer for testing and previews
     static func sample(id: UUID = UUID(), name: String = "Sample Route",
                       coordinates: [CLLocationCoordinate2D]? = nil,
                       runCount: Int = 5,
-                      bestTime: TimeInterval = 1320) -> Route {
+                      bestTime: TimeInterval = 1320,
+                      distance: Double = 1.0) -> Route {
         
         let defaultCoordinates = [
             CLLocationCoordinate2D(latitude: 37.7749, longitude: -122.4194),
@@ -34,7 +36,8 @@ struct Route: Identifiable, Hashable {
             name: name,
             path: coordinates ?? defaultCoordinates,
             runCount: runCount,
-            bestTime: bestTime
+            bestTime: bestTime,
+            distance: distance
         )
     }
     
@@ -52,5 +55,14 @@ struct Route: Identifiable, Hashable {
     
     static func == (lhs: Route, rhs: Route) -> Bool {
         lhs.id == rhs.id
+    }
+    
+    init(id: UUID, name: String, path: [CLLocationCoordinate2D], runCount: Int, bestTime: TimeInterval, distance: Double) {
+        self.id = id
+        self.name = name
+        self.path = path
+        self.runCount = runCount
+        self.bestTime = bestTime
+        self.distance = distance
     }
 }
