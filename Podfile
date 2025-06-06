@@ -10,6 +10,12 @@ target 'CircleRun' do
   pod 'Firebase/Auth'
   pod 'Firebase/Firestore'
 
+  # Mapbox dependencies
+  pod 'MapboxMaps', '~> 10.16.1'
+  pod 'MapboxDirections', '~> 2.12.0'
+  pod 'MapboxCoreNavigation', '~> 2.12.0'
+  pod 'MapboxNavigation', '~> 2.12.0'
+
 
   target 'CircleRunTests' do
     inherit! :search_paths

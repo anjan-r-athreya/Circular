@@ -150,4 +150,4 @@ private struct InfoRow: View {
     NavigationStack {
         RouteDetailView(route: Route.sample())
     }
-} 
+}

@@ -37,6 +37,10 @@ class NavigationManager: NSObject, ObservableObject {
     @Published var camera: MKMapCamera?
     @Published var showsScale: Bool = true
     @Published var mapType: MKMapType = .standard
+    @Published var userLocation: CLLocation?
+    
+    // Navigation state
+    @Published var isNavigating: Bool = false
     
     // Private Properties
     private var locationManager = CLLocationManager()
@@ -46,7 +50,6 @@ class NavigationManager: NSObject, ObservableObject {
     private var distanceTraveled: CLLocationDistance = 0
     private var lastLocation: CLLocation?
     private var timer: Timer?
-    private var isNavigating: Bool = false
     private var estimatedTotalTime: TimeInterval = 0
     private var averagePace: TimeInterval = 0  // seconds per mile
     

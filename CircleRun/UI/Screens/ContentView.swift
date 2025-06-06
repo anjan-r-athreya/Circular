@@ -107,6 +107,21 @@ struct ContentView: View {
                                     .foregroundColor(.yellow)
                                     .font(.system(size: 24))
                             }
+                            
+                            // Go button
+                            Button(action: {
+                                viewModel.isDirectionsActive.toggle()
+                                // Here you'd integrate with turn-by-turn navigation
+                            }) {
+                                Label("Go", systemImage: "arrow.triangle.turn.up.right.circle.fill")
+                                    .font(.headline)
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 8)
+                                    .background(Color.green)
+                                    .cornerRadius(20)
+                                    .shadow(radius: 3)
+                            }
                         }
                     }
 
@@ -240,7 +255,7 @@ struct ContentView: View {
                             .scaleEffect(2)
                             .offset(y: 70)
                         
-                        Text("Loading")
+                        Text("Loading...")
                             .foregroundColor(.white)
                             .font(.headline)
                             .padding(.top, 8)

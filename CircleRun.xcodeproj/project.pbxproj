@@ -6,6 +6,12 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		58097D9C2DF0C87A0021A24D /* MapboxMaps in Frameworks */ = {isa = PBXBuildFile; productRef = 58097D9B2DF0C87A0021A24D /* MapboxMaps */; };
+		58097D9F2DF0C90B0021A24D /* MapboxDirections in Frameworks */ = {isa = PBXBuildFile; productRef = 58097D9E2DF0C90B0021A24D /* MapboxDirections */; };
+		58097DA12DF0C90B0021A24D /* mapbox-directions-swift in Frameworks */ = {isa = PBXBuildFile; productRef = 58097DA02DF0C90B0021A24D /* mapbox-directions-swift */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		586E7ED62D9F283B001AA092 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -43,7 +49,7 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		586E7EF32D9F3092001AA092 /* Exceptions for "CircleRun" folder in "CircleRun" target */ = {
+		58097E1C2DF1E5B70021A24D /* Exceptions for "CircleRun" folder in "CircleRun" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
@@ -53,10 +59,10 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		586E7EC72D9F2839001AA092 /* CircleRun */ = {
+		58097E012DF1E5B70021A24D /* CircleRun */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				586E7EF32D9F3092001AA092 /* Exceptions for "CircleRun" folder in "CircleRun" target */,
+				58097E1C2DF1E5B70021A24D /* Exceptions for "CircleRun" folder in "CircleRun" target */,
 			);
 			path = CircleRun;
 			sourceTree = "<group>";
@@ -78,6 +84,9 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				58097D9C2DF0C87A0021A24D /* MapboxMaps in Frameworks */,
+				58097D9F2DF0C90B0021A24D /* MapboxDirections in Frameworks */,
+				58097DA12DF0C90B0021A24D /* mapbox-directions-swift in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -101,7 +110,7 @@
 		586E7EBC2D9F2839001AA092 = {
 			isa = PBXGroup;
 			children = (
-				586E7EC72D9F2839001AA092 /* CircleRun */,
+				58097E012DF1E5B70021A24D /* CircleRun */,
 				586E7ED82D9F283B001AA092 /* CircleRunTests */,
 				586E7EE22D9F283B001AA092 /* CircleRunUITests */,
 				586E7EC62D9F2839001AA092 /* Products */,
@@ -135,10 +144,13 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				586E7EC72D9F2839001AA092 /* CircleRun */,
+				58097E012DF1E5B70021A24D /* CircleRun */,
 			);
 			name = CircleRun;
 			packageProductDependencies = (
+				58097D9B2DF0C87A0021A24D /* MapboxMaps */,
+				58097D9E2DF0C90B0021A24D /* MapboxDirections */,
+				58097DA02DF0C90B0021A24D /* mapbox-directions-swift */,
 			);
 			productName = CircleRun;
 			productReference = 586E7EC52D9F2839001AA092 /* CircleRun.app */;
@@ -222,6 +234,10 @@
 			);
 			mainGroup = 586E7EBC2D9F2839001AA092;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				58097D9A2DF0C87A0021A24D /* XCRemoteSwiftPackageReference "mapbox-maps-ios" */,
+				58097D9D2DF0C90B0021A24D /* XCRemoteSwiftPackageReference "mapbox-directions-swift" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 586E7EC62D9F2839001AA092 /* Products */;
 			projectDirPath = "";
@@ -429,8 +445,9 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = CircleRun/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Circular;
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Health Updates Access";
 				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "Show the real time user location";
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Show the real time user location";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Real Time User Location Updates";
 				INFOPLIST_KEY_NSMotionUsageDescription = "Get physical activity data";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -464,8 +481,9 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = CircleRun/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Circular;
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Health Updates Access";
 				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "Show the real time user location";
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Show the real time user location";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Real Time User Location Updates";
 				INFOPLIST_KEY_NSMotionUsageDescription = "Get physical activity data";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -593,6 +611,43 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		58097D9A2DF0C87A0021A24D /* XCRemoteSwiftPackageReference "mapbox-maps-ios" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/mapbox/mapbox-maps-ios";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 10.0.0;
+			};
+		};
+		58097D9D2DF0C90B0021A24D /* XCRemoteSwiftPackageReference "mapbox-directions-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/mapbox/mapbox-directions-swift.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.5.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		58097D9B2DF0C87A0021A24D /* MapboxMaps */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 58097D9A2DF0C87A0021A24D /* XCRemoteSwiftPackageReference "mapbox-maps-ios" */;
+			productName = MapboxMaps;
+		};
+		58097D9E2DF0C90B0021A24D /* MapboxDirections */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 58097D9D2DF0C90B0021A24D /* XCRemoteSwiftPackageReference "mapbox-directions-swift" */;
+			productName = MapboxDirections;
+		};
+		58097DA02DF0C90B0021A24D /* mapbox-directions-swift */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 58097D9D2DF0C90B0021A24D /* XCRemoteSwiftPackageReference "mapbox-directions-swift" */;
+			productName = "mapbox-directions-swift";
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 586E7EBD2D9F2839001AA092 /* Project object */;
 }

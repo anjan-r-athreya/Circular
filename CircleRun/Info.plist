@@ -12,6 +12,8 @@ com.circlerun.locationupdate</string>
 	<array>
 		<dict/>
 	</array>
+	<key>MBXAccessToken</key>
+	<string>pk.eyJ1IjoiYW5qYW4tci1hdGhyZXlhIiwiYSI6ImNtOWdjanhuNjAyZDQya3B4dDd1OXFpNGQifQ.GJva2IoFhwjXwBRw7nGH2A</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>location</string>

@@ -19,26 +19,33 @@ struct MainTabView: View {
                 }
                 .tag(0)
             
+            // Map tab
+            MapboxMapView()
+                .tabItem {
+                    Label("Map", systemImage: "map.fill")
+                }
+                .tag(1)
+            
             // Apple Watch tab
             AppleWatchView()
                 .tabItem {
                     Label("Watch", systemImage: "applewatch")
                 }
-                .tag(1)
+                .tag(2)
             
             // Favorites tab with the complete FavoritesView
             FavoritesView()
                 .tabItem {
                     Label("Favorites", systemImage: "star.fill")
                 }
-                .tag(2)
-            
-            // Profile tab
-            Text("Profile View")
-                .tabItem {
-                    Label("Profile", systemImage: "person.fill")
-                }
                 .tag(3)
+            
+            // Settings tab
+            SettingsView()
+                .tabItem {
+                    Label("Settings", systemImage: "gear")
+                }
+                .tag(4)
         }
         .accentColor(.blue)
     }

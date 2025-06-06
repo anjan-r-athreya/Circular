@@ -13,6 +13,11 @@ import CoreLocation
 struct CircleRunApp: App {
     @UIApplicationDelegateAdaptor private var appDelegate: AppDelegate
     
+    init() {
+        // Configure Mapbox
+        MapboxConfig.configure()
+    }
+    
     var body: some Scene {
         WindowGroup {
             MainTabView()

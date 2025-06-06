@@ -5,6 +5,13 @@
 //  Created by Anjan Athreya on 5/23/25.
 //
 
+//
+//  SimpleRouteCardView.swift
+//  CircleRun
+//
+//  Created by Anjan Athreya on 5/23/25.
+//
+
 import SwiftUI
 import MapKit
 
@@ -78,3 +85,4 @@ struct SimpleRouteCardView_Previews: PreviewProvider {
             .padding()
     }
 }
+
