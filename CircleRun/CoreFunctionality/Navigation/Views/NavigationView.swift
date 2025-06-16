@@ -8,6 +8,7 @@
 import SwiftUI
 import MapKit
 import CoreLocation
+import MapboxNavigation
 
 struct NavigationView: View {
     @StateObject var navigationManager: NavigationManager

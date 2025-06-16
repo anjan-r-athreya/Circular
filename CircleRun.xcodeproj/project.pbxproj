@@ -7,9 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		58097D9C2DF0C87A0021A24D /* MapboxMaps in Frameworks */ = {isa = PBXBuildFile; productRef = 58097D9B2DF0C87A0021A24D /* MapboxMaps */; };
-		58097D9F2DF0C90B0021A24D /* MapboxDirections in Frameworks */ = {isa = PBXBuildFile; productRef = 58097D9E2DF0C90B0021A24D /* MapboxDirections */; };
-		58097DA12DF0C90B0021A24D /* mapbox-directions-swift in Frameworks */ = {isa = PBXBuildFile; productRef = 58097DA02DF0C90B0021A24D /* mapbox-directions-swift */; };
+		5810F68F2DFDF2D50047AB4F /* MapboxMaps in Frameworks */ = {isa = PBXBuildFile; productRef = 5810F68E2DFDF2D50047AB4F /* MapboxMaps */; };
+		5810F6912DFDF2FF0047AB4F /* MapboxNavigation in Frameworks */ = {isa = PBXBuildFile; productRef = 5810F6902DFDF2FF0047AB4F /* MapboxNavigation */; };
+		5810F6932DFDF3030047AB4F /* MapboxCoreNavigation in Frameworks */ = {isa = PBXBuildFile; productRef = 5810F6922DFDF3030047AB4F /* MapboxCoreNavigation */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -40,6 +40,16 @@
 			name = "Embed Watch Content";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		5864FE762DFBD12900B7ABC2 /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
@@ -49,7 +59,7 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		58097E1C2DF1E5B70021A24D /* Exceptions for "CircleRun" folder in "CircleRun" target */ = {
+		5864FDAF2DFBCC9700B7ABC2 /* Exceptions for "CircleRun" folder in "CircleRun" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
@@ -62,7 +72,7 @@
 		58097E012DF1E5B70021A24D /* CircleRun */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				58097E1C2DF1E5B70021A24D /* Exceptions for "CircleRun" folder in "CircleRun" target */,
+				5864FDAF2DFBCC9700B7ABC2 /* Exceptions for "CircleRun" folder in "CircleRun" target */,
 			);
 			path = CircleRun;
 			sourceTree = "<group>";
@@ -84,9 +94,9 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				58097D9C2DF0C87A0021A24D /* MapboxMaps in Frameworks */,
-				58097D9F2DF0C90B0021A24D /* MapboxDirections in Frameworks */,
-				58097DA12DF0C90B0021A24D /* mapbox-directions-swift in Frameworks */,
+				5810F68F2DFDF2D50047AB4F /* MapboxMaps in Frameworks */,
+				5810F6932DFDF3030047AB4F /* MapboxCoreNavigation in Frameworks */,
+				5810F6912DFDF2FF0047AB4F /* MapboxNavigation in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -107,6 +117,13 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		1A0665D797223E8C2C29AA9C /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		586E7EBC2D9F2839001AA092 = {
 			isa = PBXGroup;
 			children = (
@@ -114,6 +131,7 @@
 				586E7ED82D9F283B001AA092 /* CircleRunTests */,
 				586E7EE22D9F283B001AA092 /* CircleRunUITests */,
 				586E7EC62D9F2839001AA092 /* Products */,
+				1A0665D797223E8C2C29AA9C /* Frameworks */,
 			);
 			sourceTree = "<group>";
 		};
@@ -138,6 +156,7 @@
 				586E7EC22D9F2839001AA092 /* Frameworks */,
 				586E7EC32D9F2839001AA092 /* Resources */,
 				580402412DE0FE5600A02939 /* Embed Watch Content */,
+				5864FE762DFBD12900B7ABC2 /* Embed Frameworks */,
 			);
 			buildRules = (
 			);
@@ -147,11 +166,6 @@
 				58097E012DF1E5B70021A24D /* CircleRun */,
 			);
 			name = CircleRun;
-			packageProductDependencies = (
-				58097D9B2DF0C87A0021A24D /* MapboxMaps */,
-				58097D9E2DF0C90B0021A24D /* MapboxDirections */,
-				58097DA02DF0C90B0021A24D /* mapbox-directions-swift */,
-			);
 			productName = CircleRun;
 			productReference = 586E7EC52D9F2839001AA092 /* CircleRun.app */;
 			productType = "com.apple.product-type.application";
@@ -160,6 +174,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 586E7EEC2D9F283B001AA092 /* Build configuration list for PBXNativeTarget "CircleRunTests" */;
 			buildPhases = (
+				3E45F174DE5DE7C3DD48DC46 /* [CP] Check Pods Manifest.lock */,
 				586E7ED12D9F283B001AA092 /* Sources */,
 				586E7ED22D9F283B001AA092 /* Frameworks */,
 				586E7ED32D9F283B001AA092 /* Resources */,
@@ -173,8 +188,6 @@
 				586E7ED82D9F283B001AA092 /* CircleRunTests */,
 			);
 			name = CircleRunTests;
-			packageProductDependencies = (
-			);
 			productName = CircleRunTests;
 			productReference = 586E7ED52D9F283B001AA092 /* CircleRunTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
@@ -183,9 +196,11 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 586E7EEF2D9F283B001AA092 /* Build configuration list for PBXNativeTarget "CircleRunUITests" */;
 			buildPhases = (
+				CCA80DACC471B925427F71E2 /* [CP] Check Pods Manifest.lock */,
 				586E7EDB2D9F283B001AA092 /* Sources */,
 				586E7EDC2D9F283B001AA092 /* Frameworks */,
 				586E7EDD2D9F283B001AA092 /* Resources */,
+				32C8C040215C89C90A6981E6 /* [CP] Embed Pods Frameworks */,
 			);
 			buildRules = (
 			);
@@ -196,8 +211,6 @@
 				586E7EE22D9F283B001AA092 /* CircleRunUITests */,
 			);
 			name = CircleRunUITests;
-			packageProductDependencies = (
-			);
 			productName = CircleRunUITests;
 			productReference = 586E7EDF2D9F283B001AA092 /* CircleRunUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
@@ -235,8 +248,8 @@
 			mainGroup = 586E7EBC2D9F2839001AA092;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				58097D9A2DF0C87A0021A24D /* XCRemoteSwiftPackageReference "mapbox-maps-ios" */,
-				58097D9D2DF0C90B0021A24D /* XCRemoteSwiftPackageReference "mapbox-directions-swift" */,
+				5853B4642DFDE9FB005B8B8D /* XCRemoteSwiftPackageReference "mapbox-maps-ios" */,
+				5823C5512DFDEC44005E00A4 /* XCRemoteSwiftPackageReference "mapbox-navigation-ios" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 586E7EC62D9F2839001AA092 /* Products */;
@@ -273,6 +286,74 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		32C8C040215C89C90A6981E6 /* [CP] Embed Pods Frameworks */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-CircleRun-CircleRunUITests/Pods-CircleRun-CircleRunUITests-frameworks-${CONFIGURATION}-input-files.xcfilelist",
+			);
+			inputPaths = (
+			);
+			name = "[CP] Embed Pods Frameworks";
+			outputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-CircleRun-CircleRunUITests/Pods-CircleRun-CircleRunUITests-frameworks-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-CircleRun-CircleRunUITests/Pods-CircleRun-CircleRunUITests-frameworks.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
+		3E45F174DE5DE7C3DD48DC46 /* [CP] Check Pods Manifest.lock */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"${PODS_PODFILE_DIR_PATH}/Podfile.lock",
+				"${PODS_ROOT}/Manifest.lock",
+			);
+			name = "[CP] Check Pods Manifest.lock";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/Pods-CircleRunTests-checkManifestLockResult.txt",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
+			showEnvVarsInLog = 0;
+		};
+		CCA80DACC471B925427F71E2 /* [CP] Check Pods Manifest.lock */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"${PODS_PODFILE_DIR_PATH}/Podfile.lock",
+				"${PODS_ROOT}/Manifest.lock",
+			);
+			name = "[CP] Check Pods Manifest.lock";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/Pods-CircleRun-CircleRunUITests-checkManifestLockResult.txt",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
+			showEnvVarsInLog = 0;
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		586E7EC12D9F2839001AA092 /* Sources */ = {
@@ -613,39 +694,39 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
-		58097D9A2DF0C87A0021A24D /* XCRemoteSwiftPackageReference "mapbox-maps-ios" */ = {
+		5823C5512DFDEC44005E00A4 /* XCRemoteSwiftPackageReference "mapbox-navigation-ios" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/mapbox/mapbox-navigation-ios.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.12.0;
+			};
+		};
+		5853B4642DFDE9FB005B8B8D /* XCRemoteSwiftPackageReference "mapbox-maps-ios" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/mapbox/mapbox-maps-ios";
 			requirement = {
 				kind = upToNextMajorVersion;
-				minimumVersion = 10.0.0;
-			};
-		};
-		58097D9D2DF0C90B0021A24D /* XCRemoteSwiftPackageReference "mapbox-directions-swift" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/mapbox/mapbox-directions-swift.git";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 2.5.0;
+				minimumVersion = 10.12.1;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		58097D9B2DF0C87A0021A24D /* MapboxMaps */ = {
+		5810F68E2DFDF2D50047AB4F /* MapboxMaps */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 58097D9A2DF0C87A0021A24D /* XCRemoteSwiftPackageReference "mapbox-maps-ios" */;
+			package = 5853B4642DFDE9FB005B8B8D /* XCRemoteSwiftPackageReference "mapbox-maps-ios" */;
 			productName = MapboxMaps;
 		};
-		58097D9E2DF0C90B0021A24D /* MapboxDirections */ = {
+		5810F6902DFDF2FF0047AB4F /* MapboxNavigation */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 58097D9D2DF0C90B0021A24D /* XCRemoteSwiftPackageReference "mapbox-directions-swift" */;
-			productName = MapboxDirections;
+			package = 5823C5512DFDEC44005E00A4 /* XCRemoteSwiftPackageReference "mapbox-navigation-ios" */;
+			productName = MapboxNavigation;
 		};
-		58097DA02DF0C90B0021A24D /* mapbox-directions-swift */ = {
+		5810F6922DFDF3030047AB4F /* MapboxCoreNavigation */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 58097D9D2DF0C90B0021A24D /* XCRemoteSwiftPackageReference "mapbox-directions-swift" */;
-			productName = "mapbox-directions-swift";
+			package = 5823C5512DFDEC44005E00A4 /* XCRemoteSwiftPackageReference "mapbox-navigation-ios" */;
+			productName = MapboxCoreNavigation;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
