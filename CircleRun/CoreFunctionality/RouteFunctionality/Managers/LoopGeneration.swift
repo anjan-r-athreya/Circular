@@ -11,28 +11,52 @@
 
 import Foundation
 import SwiftUI
-import MapKit
+import MapboxDirections
 import CoreLocation
+import MapKit
 
+/// Generates circular routes using MapboxDirections and saves to your Route model.
 class LoopGeneration {
     static let shared = LoopGeneration()
     private var isRequestInProgress = false
     private var bestAttemptMileage: Double = 0.0
-    
+    private var targetDistance: Double = 0.0
+
     private init() {}
-    
-    // Main function to generate circular routes
-    func generateCircularRoute(from start: CLLocationCoordinate2D, targetMiles: Double,
-                               numPoints: Int = 8, errorMargin: Double = 0.1, viewModel: MapViewModel, completion: @escaping () -> Void) {
-        // Make initial guess based on a simple heuristic
-        let initialScale = (sqrt(targetMiles / (2 * Double.pi)) * 0.5) // Rough estimate for circular path
-        
-        createRouteWithScale(from: start, scale: initialScale, numPoints: numPoints,
-                             targetMiles: targetMiles, errorMargin: errorMargin,
-                             attemptCount: 1, maxAttempts: 5, viewModel: viewModel, completion: completion)
+
+    func generateCircularRoute(
+        from start: CLLocationCoordinate2D,
+        targetMiles: Double,
+        numPoints: Int = 12,
+        errorMargin: Double = 0.01, // Reduced error margin to 1% of target distance
+        retryDelay: TimeInterval = 2.0,
+        viewModel: MapViewModel,
+        completion: @escaping () -> Void
+    ) {
+        let initialScale = min(calculateOptimalInitialScale(targetMiles: targetMiles), 2.0)
+        self.targetDistance = targetMiles
+
+        Task {
+            await createRouteWithScale(
+                from: start,
+                initialScale: initialScale,
+                numPoints: numPoints,
+                targetMiles: targetMiles,
+                errorMargin: errorMargin,
+                maxAttempts: 5,
+                retryDelay: retryDelay,
+                viewModel: viewModel,
+                completion: completion
+            )
+        }
     }
-    
-    // Helper function to calculate actual route distance from coordinates
+
+    private func calculateOptimalInitialScale(targetMiles: Double) -> Double {
+        let baseScale = sqrt(targetMiles / (2 * Double.pi))
+        let adjustmentFactor = 1.0 + (targetMiles / 5.0)
+        return baseScale * adjustmentFactor
+    }
+
     private func calculateRouteDistance(coordinates: [CLLocationCoordinate2D]) -> Double {
         var totalDistance: CLLocationDistance = 0
         guard coordinates.count > 1 else { return 0 }
@@ -42,242 +66,314 @@ class LoopGeneration {
             let loc2 = CLLocation(latitude: coordinates[i + 1].latitude, longitude: coordinates[i + 1].longitude)
             totalDistance += loc1.distance(from: loc2)
         }
-        
-        return totalDistance / 1609.34 // Convert meters to miles
-    }
-    
-    // Helper function to calculate distance of MKRoute
-    private func calculateRouteDistance(route: MKRoute) -> Double {
-        return calculateRouteDistance(coordinates: route.polyline.coordinates)
-    }
-    
-    // Helper function to validate segment distances
-    private func validateSegmentDistances(segments: [MKPolyline], reportedTotal: Double) {
-        print("\n=== Segment Distance Validation ===")
-        var calculatedTotal: Double = 0
-        
-        for (index, segment) in segments.enumerated() {
-            let segmentDistance = calculateRouteDistance(coordinates: segment.coordinates)
-            calculatedTotal += segmentDistance
-            print("Segment \(index + 1): \(String(format: "%.2f", segmentDistance)) miles")
-        }
-        
-        print("Total from segments: \(String(format: "%.2f", calculatedTotal)) miles")
-        print("Reported total: \(String(format: "%.2f", reportedTotal)) miles")
-        print("Difference: \(String(format: "%.2f", abs(calculatedTotal - reportedTotal))) miles")
-        print("================================\n")
-    }
-    
-    // Helper function to validate route distance
-    private func validateRouteDistance(polyline: MKPolyline, reportedDistance: Double) {
-        let coordinates = polyline.coordinates
-        let calculatedDistance = calculateRouteDistance(coordinates: coordinates)
-        
-        print("\n=== Route Distance Validation ===")
-        print("Reported distance: \(String(format: "%.2f", reportedDistance)) miles")
-        print("Calculated distance: \(String(format: "%.2f", calculatedDistance)) miles")
-        print("Difference: \(String(format: "%.2f", abs(reportedDistance - calculatedDistance))) miles")
-        print("==============================\n")
-        
-        // If there's a significant discrepancy, log it
-        if abs(reportedDistance - calculatedDistance) > 0.1 {
-            print("⚠️ WARNING: Significant distance discrepancy detected!")
-        }
-        
-        // Update the actual distance to use the calculated value
-        bestAttemptMileage = calculatedDistance
+        return totalDistance / 1609.34 // meters to miles
     }
 
-    // Modified getRouteSegments to properly calculate segment distances
-    private func getRouteSegments(waypoints: [MKMapItem], index: Int, segments: [MKPolyline],
-                                  totalDistanceValue: Double, attemptCount: Int, maxAttempts: Int,
-                                  completion: @escaping (MKPolyline?, Double) -> Void) {
-        if index >= waypoints.count - 1 {
-            if segments.isEmpty {
-                completion(nil, 0.0)
-                return
-            }
-            
-            let combinedPolyline = combinePolylines(segments)
-            let actualDistance = calculateRouteDistance(coordinates: combinedPolyline.coordinates)
-            
-            // Validate individual segments and total distance
-            validateSegmentDistances(segments: segments, reportedTotal: totalDistanceValue)
-            
-            print("\n=== Final Route Details ===")
-            print("Number of segments: \(segments.count)")
-            print("Total coordinates: \(combinedPolyline.coordinates.count)")
-            print("Distance from combined polyline: \(String(format: "%.2f", actualDistance)) miles")
-            print("Distance from segment sum: \(String(format: "%.2f", totalDistanceValue)) miles")
-            print("==========================\n")
-            
-            completion(combinedPolyline, actualDistance)
-            return
-        }
-
-        let request = MKDirections.Request()
-        request.source = waypoints[index]
-        request.destination = waypoints[index + 1]
-        request.transportType = .walking
-        request.requestsAlternateRoutes = true
-
-        MKDirections(request: request).calculate { [weak self] response, error in
-            guard let self = self else { return }
-            
-            if let routes = response?.routes, !routes.isEmpty {
-                // Select the most direct route and validate its distance
-                let mostDirectRoute = routes.min(by: { $0.distance < $1.distance }) ?? routes.first!
-                let reportedDistance = mostDirectRoute.distance / 1609.34 // Convert to miles
-                let calculatedDistance = self.calculateRouteDistance(route: mostDirectRoute)
-                
-                print("\nSegment \(index + 1) Distance Comparison:")
-                print("MapKit reported: \(String(format: "%.2f", reportedDistance)) miles")
-                print("Actually calculated: \(String(format: "%.2f", calculatedDistance)) miles")
-                
-                var updatedSegments = segments
-                updatedSegments.append(mostDirectRoute.polyline)
-                
-                let updatedTotalDistance = totalDistanceValue + calculatedDistance
-                
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                    self.getRouteSegments(waypoints: waypoints, index: index + 1,
-                                          segments: updatedSegments,
-                                          totalDistanceValue: updatedTotalDistance,
-                                          attemptCount: attemptCount,
-                                          maxAttempts: maxAttempts,
-                                          completion: completion)
+    private func calculateEdgeConstraints(coordinates: [CLLocationCoordinate2D]) -> Bool {
+        guard coordinates.count > 2 else { return false }
+        for i in 0..<coordinates.count {
+            var edgeCount = 0
+            if i > 0 {
+                let prevDist = calculateRouteDistance(coordinates: [coordinates[i-1], coordinates[i]])
+                if prevDist > 0.01 {
+                    edgeCount += 1
                 }
-            } else {
-                print("Routing error for segment \(index): \(error?.localizedDescription ?? "Unknown error")")
-                completion(nil, 0.0)
+            }
+            if i < coordinates.count - 1 {
+                let nextDist = calculateRouteDistance(coordinates: [coordinates[i], coordinates[i+1]])
+                if nextDist > 0.01 {
+                    edgeCount += 1
+                }
+            }
+            if i == 0 || i == coordinates.count - 1 {
+                edgeCount += 1
+            }
+            if edgeCount != 2 {
+                return false
             }
         }
+        return true
     }
-    
-    private func createRouteWithScale(from start: CLLocationCoordinate2D, scale: Double,
-                                      numPoints: Int, targetMiles: Double, errorMargin: Double,
-                                      attemptCount: Int, maxAttempts: Int, viewModel: MapViewModel, completion: @escaping () -> Void) {
+
+    private func smoothRoute(
+        coordinates: [CLLocationCoordinate2D],
+        smoothingFactor: Double = 0.3
+    ) -> [CLLocationCoordinate2D] {
+        guard coordinates.count > 2 else { return coordinates }
+        var smoothed: [CLLocationCoordinate2D] = []
+        for i in 0..<coordinates.count {
+            let prev = coordinates[max(0, i-1)]
+            let current = coordinates[i]
+            let next = coordinates[min(coordinates.count-1, i+1)]
+            let lat = (1 - smoothingFactor) * current.latitude +
+                (smoothingFactor/2) * (prev.latitude + next.latitude)
+            let lon = (1 - smoothingFactor) * current.longitude +
+                (smoothingFactor/2) * (prev.longitude + next.longitude)
+            smoothed.append(CLLocationCoordinate2D(latitude: lat, longitude: lon))
+        }
+        return smoothed
+    }
+
+    private func validateRouteQuality(route: MapboxDirections.Route) -> Bool {
+        guard let coordinates = route.legs.first?.shape.coordinates else { return false }
+        if !calculateEdgeConstraints(coordinates: coordinates) {
+            return false
+        }
+        for i in 0..<coordinates.count - 1 {
+            let distance = calculateRouteDistance(coordinates: [coordinates[i], coordinates[i + 1]])
+            if distance > 1.0 {
+                return false
+            }
+        }
+        let actualDistance = route.distance / 1609.34
+        if abs(actualDistance - targetDistance) > targetDistance * 0.01 { // Reduced error margin from 10% to 1%
+            return false
+        }
+        return true
+    }
+
+    private func offsetCoordinate(
+        from coordinate: CLLocationCoordinate2D,
+        metersEast: Double,
+        metersNorth: Double
+    ) -> CLLocationCoordinate2D {
+        let earthRadius = 6378137.0
+        let lat = coordinate.latitude
+        let lon = coordinate.longitude
+        let newLat = lat + (metersNorth / earthRadius) * (180.0 / Double.pi)
+        let newLon = lon + (metersEast / (earthRadius * cos(Double.pi * lat / 180.0))) * (180.0 / Double.pi)
+        return CLLocationCoordinate2D(latitude: newLat, longitude: newLon)
+    }
+
+    private func createRouteWithScale(
+        from start: CLLocationCoordinate2D,
+        initialScale: Double,
+        numPoints: Int,
+        targetMiles: Double,
+        errorMargin: Double,
+        maxAttempts: Int = 10, // Increased max attempts from 5 to 10
+        retryDelay: TimeInterval,
+        viewModel: MapViewModel,
+        completion: @escaping () -> Void
+    ) async {
         guard !isRequestInProgress else { return }
         isRequestInProgress = true
-        
-        print("\n=== Attempt \(attemptCount) of \(maxAttempts) ===")
-        print("Target distance: \(String(format: "%.2f", targetMiles)) miles")
-        print("Current scale: \(String(format: "%.2f", scale))")
-        print("Number of points: \(numPoints)")
-        
-        // Calculate initial circle properties
-        let radiusInMeters = scale * 1609.34
-        let estimatedCircumference = 2 * Double.pi * radiusInMeters
-        print("Radius: \(String(format: "%.2f", scale)) miles")
-        print("Estimated circumference: \(String(format: "%.2f", estimatedCircumference / 1609.34)) miles")
-        
-        // Create waypoints with more precise spacing
-        var waypoints: [MKMapItem] = []
-        waypoints.append(MKMapItem(placemark: MKPlacemark(coordinate: start)))
-        
-        // Calculate angular spacing for even distribution
-        let angleIncrement = 2.0 * Double.pi / Double(numPoints)
-        
-        for i in 0..<numPoints {
-            let angle = angleIncrement * Double(i)
-            let waypointEast = radiusInMeters * cos(angle)
-            let waypointNorth = radiusInMeters * sin(angle)
-            let waypoint = offsetCoordinate(from: start, metersEast: waypointEast, metersNorth: waypointNorth)
-            waypoints.append(MKMapItem(placemark: MKPlacemark(coordinate: waypoint)))
-        }
-        
-        waypoints.append(MKMapItem(placemark: MKPlacemark(coordinate: start)))
-        
-        // Calculate straight-line distances between waypoints for reference
-        print("\nWaypoint Spacing Validation:")
-        for i in 0..<waypoints.count - 1 {
-            let coord1 = waypoints[i].placemark.coordinate
-            let coord2 = waypoints[i + 1].placemark.coordinate
-            let distance = calculateRouteDistance(coordinates: [coord1, coord2])
-            print("Waypoint \(i) to \(i + 1): \(String(format: "%.2f", distance)) miles")
-        }
-        
-        getRouteSegments(waypoints: waypoints, index: 0, segments: [], totalDistanceValue: 0.0, attemptCount: attemptCount, maxAttempts: maxAttempts) { [weak self] combinedPolyline, totalDistance in
-            guard let self = self else { return }
-            self.isRequestInProgress = false
-            
-            if let polyline = combinedPolyline {
-                let actualDistance = self.calculateRouteDistance(coordinates: polyline.coordinates)
-                
-                let isAcceptableRoute = abs(actualDistance - targetMiles) <= errorMargin
-                let isFinalAttempt = attemptCount >= maxAttempts
-                
-                if isAcceptableRoute || isFinalAttempt {
-                    viewModel.routePolyline = polyline
-                    viewModel.position = .region(MKCoordinateRegion(polyline.boundingMapRect))
-                    viewModel.actualMiles = actualDistance
+
+        var currentScale = initialScale
+        var currentNumPoints = numPoints
+        var attemptCount = 1
+        var bestRoute: (route: MapboxDirections.Route, distance: Double)? = nil
+        var previousDistance: Double? = nil
+        var bestPolyline: MKPolyline?
+        var allAttempts: [(attempt: Int, distance: Double)] = []
+
+        while attemptCount <= maxAttempts {
+            print("\n=== Attempt \(attemptCount) of \(maxAttempts) ===")
+            print("Target distance: \(String(format: "%.2f", targetMiles)) miles")
+            print("Current scale: \(String(format: "%.2f", currentScale))")
+            print("Number of points: \(currentNumPoints)")
+            print("Current error margin: \(String(format: "%.2f%%", errorMargin * 100))")
+
+            let radiusInMeters = currentScale * 1609.34
+            let estimatedCircumference = 2 * Double.pi * radiusInMeters / 1609.34
+            print("Radius: \(String(format: "%.2f", currentScale)) miles")
+            print("Estimated circumference: \(String(format: "%.2f", estimatedCircumference)) miles")
+
+            var waypoints: [Waypoint] = [
+                Waypoint(coordinate: start, coordinateAccuracy: 5.0, name: "Start")
+            ]
+
+            let angleIncrement = 2.0 * Double.pi / Double(currentNumPoints)
+            for i in 0..<currentNumPoints {
+                let angle = angleIncrement * Double(i)
+                let waypointEast = radiusInMeters * cos(angle)
+                let waypointNorth = radiusInMeters * sin(angle)
+                let waypointCoord = offsetCoordinate(from: start, metersEast: waypointEast, metersNorth: waypointNorth)
+                let waypoint = Waypoint(coordinate: waypointCoord, coordinateAccuracy: 5.0, name: "Point \(i + 1)")
+                waypoints.append(waypoint)
+            }
+
+            let finalWaypoint = Waypoint(coordinate: start, coordinateAccuracy: 5.0, name: "Start")
+            waypoints.append(finalWaypoint)
+
+            print("\nWaypoint Spacing Validation:")
+            for i in 0..<waypoints.count - 1 {
+                let coord1 = waypoints[i].coordinate
+                let coord2 = waypoints[i + 1].coordinate
+                let distance = calculateRouteDistance(coordinates: [coord1, coord2])
+                print("Waypoint \(i) to \(i + 1): \(String(format: "%.2f", distance)) miles")
+            }
+
+            let options = RouteOptions(waypoints: waypoints, profileIdentifier: .automobile)
+            options.includesSteps = true
+            options.routeShapeResolution = .full
+            options.attributeOptions = [.distance, .expectedTravelTime]
+            // Only .ferry is valid for Mapbox Directions; .motorway will cause errors
+            options.roadClassesToAvoid = [.ferry]
+
+            do {
+                let response = try await withCheckedThrowingContinuation { continuation in
+                    Directions.shared.calculate(options) { (_, result) in
+                        switch result {
+                        case .success(let response):
+                            continuation.resume(returning: response)
+                        case .failure(let error):
+                            continuation.resume(throwing: error)
+                        }
+                    }
+                }
+
+                isRequestInProgress = false
+
+                guard let route = response.routes?.first else {
+                    print("No routes returned")
+                    if currentNumPoints > 4 && attemptCount < maxAttempts {
+                        currentNumPoints -= 1
+                        attemptCount += 1
+                        try? await Task.sleep(nanoseconds: UInt64(retryDelay * 1_000_000_000))
+                        continue
+                    } else {
+                        print("Failed to generate route after \(attemptCount) attempts")
+                        completion()
+                        return
+                    }
+                }
+
+                if !validateRouteQuality(route: route) {
+                    print("Route failed quality check")
+                    if currentNumPoints > 4 && attemptCount < maxAttempts {
+                        currentNumPoints -= 1
+                        attemptCount += 1
+                        try? await Task.sleep(nanoseconds: UInt64(retryDelay * 1_000_000_000))
+                        continue
+                    } else {
+                        print("Failed quality check after \(attemptCount) attempts")
+                        completion()
+                        return
+                    }
+                }
+
+                let actualDistance = route.distance / 1609.34
+                self.bestAttemptMileage = actualDistance
+
+                let smoothedCoordinates = smoothRoute(
+                    coordinates: route.legs.first?.shape.coordinates ?? [],
+                    smoothingFactor: 0.3
+                )
+                // Convert Mapbox route shape to MKPolyline
+                guard let coordinates = route.legs.first?.shape.coordinates else {
+                    print("Failed to get route coordinates")
+                    completion()
+                    return
+                }
+                let polyline = MKPolyline(coordinates: coordinates, count: coordinates.count)
+
+                if let route = response.routes?.first {
+                    let actualDistance = calculateRouteDistance(coordinates: coordinates)
+                    print("Generated route of \(actualDistance) miles")
                     
-                    // Export GPX file for the final route
-                    self.exportGPXFile(coordinates: polyline.coordinates, distance: actualDistance)
+                    // Track all attempts
+                    allAttempts.append((attempt: attemptCount, distance: actualDistance))
                     
-                    print("\nFinal Route Summary (Attempt \(attemptCount)):")
+                    // Track the best route so far
+                    if bestRoute == nil || abs(actualDistance - targetMiles) < abs(bestRoute!.distance - targetMiles) {
+                        bestRoute = (route, actualDistance)
+                        // Create polyline for the best route
+                        bestPolyline = MKPolyline(coordinates: coordinates, count: coordinates.count)
+                    }
+
+                    // Check for convergence
+                    if let prev = previousDistance,
+                       abs(actualDistance - prev) < errorMargin * 0.01 { // If we're converging very slowly
+                        print("Convergence detected after \(attemptCount) attempts")
+                        if let best = bestRoute, let bestPoly = bestPolyline {
+                            viewModel.routePolyline = bestPoly
+                            viewModel.position = .region(MKCoordinateRegion(bestPoly.boundingMapRect))
+                            viewModel.actualMiles = best.distance
+                            
+                            print("\nFinal Route Summary (Converged after \(attemptCount) attempts)")
+                            print("Target distance: \(String(format: "%.2f", targetMiles)) miles")
+                            print("Actual distance: \(String(format: "%.2f", best.distance)) miles")
+                            print("Difference from target: \(String(format: "%.2f", abs(best.distance - targetMiles))) miles")
+                            print("Number of coordinates: \(coordinates.count)")
+                            
+                            completion()
+                            return
+                        }
+                    }
+                    
+                    previousDistance = actualDistance
+                    
+                    // Check if we're within acceptable range
+                    if abs(actualDistance - targetMiles) <= errorMargin {
+                        // Only update if this is the best route so far
+                        if bestRoute == nil || abs(actualDistance - targetMiles) < abs(bestRoute!.distance - targetMiles) {
+                            bestRoute = (route, actualDistance)
+                            bestPolyline = MKPolyline(coordinates: coordinates, count: coordinates.count)
+                        }
+
+                        print("\nFinal Route Summary (Within error margin after \(attemptCount) attempts)")
+                        print("Target distance: \(String(format: "%.2f", targetMiles)) miles")
+                        print("Actual distance: \(String(format: "%.2f", actualDistance)) miles")
+                        print("Difference from target: \(String(format: "%.2f", abs(actualDistance - targetMiles))) miles")
+                        print("Number of coordinates: \(coordinates.count)")
+                        
+                        completion()
+                        return
+                    }
+                }
+
+                attemptCount += 1
+                try? await Task.sleep(nanoseconds: UInt64(retryDelay * 1_000_000_000))
+            } catch {
+                print("Routing error: \(error.localizedDescription)")
+                isRequestInProgress = false
+                if currentNumPoints > 4 && attemptCount < maxAttempts {
+                    currentNumPoints -= 1
+                    attemptCount += 1
+                    try? await Task.sleep(nanoseconds: UInt64(retryDelay * 1_000_000_000))
+                    continue
+                } else {
+                    // Print summary of all attempts
+                    print("\nRoute Generation Summary:")
                     print("Target distance: \(String(format: "%.2f", targetMiles)) miles")
-                    print("Actual distance: \(String(format: "%.2f", actualDistance)) miles")
-                    print("Difference from target: \(String(format: "%.2f", abs(actualDistance - targetMiles))) miles")
-                    print("Status: \(isAcceptableRoute ? "Within acceptable error margin" : "Max attempts reached")")
-                    print("Number of coordinates: \(polyline.coordinates.count)")
+                    print("Attempts:")
+                    for attempt in allAttempts {
+                        print("Attempt \(attempt.attempt): \(String(format: "%.2f", attempt.distance)) miles")
+                    }
+                    
+                    // If we've exhausted all attempts, use the best route we found
+                    if let best = bestRoute, let bestPoly = bestPolyline {
+                        viewModel.routePolyline = bestPoly
+                        viewModel.position = .region(MKCoordinateRegion(bestPoly.boundingMapRect))
+                        viewModel.actualMiles = best.distance
+                    }
                     
                     completion()
                     return
                 }
-                
-                // Adjust scale based on actual distance
-                let newScale = scale * sqrt(targetMiles / actualDistance)
-                print("\nAdjusting scale:")
-                print("Current: \(String(format: "%.2f", scale)) miles")
-                print("New: \(String(format: "%.2f", newScale)) miles")
-                print("Adjustment factor: \(String(format: "%.2f", sqrt(targetMiles / actualDistance)))")
-                
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                    self.createRouteWithScale(from: start, scale: newScale, numPoints: numPoints,
-                                              targetMiles: targetMiles, errorMargin: errorMargin,
-                                              attemptCount: attemptCount + 1, maxAttempts: maxAttempts,
-                                              viewModel: viewModel, completion: completion)
-                }
-            } else {
-                print("Failed to generate route")
-                if numPoints > 4 {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                        self.generateCircularRoute(from: start, targetMiles: targetMiles,
-                                                   numPoints: numPoints - 1, errorMargin: errorMargin,
-                                                   viewModel: viewModel, completion: completion)
-                    }
-                } else {
-                    completion()
-                }
             }
         }
-    }
-    
-    // Helper function to combine multiple polylines into one
-    private func combinePolylines(_ polylines: [MKPolyline]) -> MKPolyline {
-        var allCoordinates: [CLLocationCoordinate2D] = []
-        
-        for polyline in polylines {
-            let coords = polyline.coordinates
-            
-            // Skip the first point of each segment except the first to avoid duplicates
-            if !allCoordinates.isEmpty && !coords.isEmpty {
-                allCoordinates.append(contentsOf: coords.dropFirst())
-            } else {
-                allCoordinates.append(contentsOf: coords)
-            }
+
+        // Print summary of all attempts
+        print("\nRoute Generation Summary:")
+        print("Target distance: \(String(format: "%.2f", targetMiles)) miles")
+        print("Attempts:")
+        for attempt in allAttempts {
+            print("Attempt \(attempt.attempt): \(String(format: "%.2f", attempt.distance)) miles")
         }
         
-        return MKPolyline(coordinates: allCoordinates, count: allCoordinates.count)
+        // If we've exhausted all attempts, use the best route we found
+        if let best = bestRoute, let bestPoly = bestPolyline {
+            viewModel.routePolyline = bestPoly
+            viewModel.position = .region(MKCoordinateRegion(bestPoly.boundingMapRect))
+            viewModel.actualMiles = best.distance
+        }
+
+        isRequestInProgress = false
+        completion()
     }
-    
-    // Helper function to get documents directory
-    private func getDocumentsDirectory() -> URL {
-        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-    }
-    
-    // Helper function to generate GPX content
+
     private func generateGPXContent(coordinates: [CLLocationCoordinate2D], routeName: String) -> String {
         var gpx = """
         <?xml version="1.0" encoding="UTF-8"?>
@@ -289,14 +385,12 @@ class LoopGeneration {
             <name>\(routeName)</name>
             <trkseg>
         """
-        
         for coord in coordinates {
             gpx += """
-            
+
                 <trkpt lat="\(coord.latitude)" lon="\(coord.longitude)"></trkpt>
             """
         }
-        
         gpx += """
             </trkseg>
         </trk>
@@ -304,21 +398,20 @@ class LoopGeneration {
         """
         return gpx
     }
-    
-    // Helper function to save GPX file
+
+    private func getDocumentsDirectory() -> URL {
+        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+    }
+
     private func exportGPXFile(coordinates: [CLLocationCoordinate2D], distance: Double) {
         let routeName = "CircleRoute_\(String(format: "%.1f", distance))mi"
         let timestamp = ISO8601DateFormatter().string(from: Date())
         let docsDir = getDocumentsDirectory()
-        
-        // Generate GPX file
         let gpxContent = generateGPXContent(coordinates: coordinates, routeName: routeName)
         let gpxPath = docsDir.appendingPathComponent("\(routeName)_\(timestamp).gpx")
-        
         do {
             try gpxContent.write(to: gpxPath, atomically: true, encoding: .utf8)
-            print("GPX file exported to:")
-            print("Path: \(gpxPath.path)")
+            print("GPX file exported to: \(gpxPath.path)")
         } catch {
             print("Error saving GPX file: \(error.localizedDescription)")
         }

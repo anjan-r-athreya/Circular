@@ -21,7 +21,7 @@ class MapboxLoopGenerator {
     func generateCircularRoute(from start: CLLocationCoordinate2D,
                              targetMiles: Double,
                              numPoints: Int = 8,
-                             errorMargin: Double = 0.1,
+                             errorMargin: Double = 0.005,
                              completion: @escaping (RouteResponse?, Error?) -> Void) {
         // Make initial guess based on a simple heuristic
         let initialScale = (sqrt(targetMiles / (2 * Double.pi)) * 0.5) // Rough estimate for circular path
@@ -86,11 +86,11 @@ class MapboxLoopGenerator {
         }
         
         // Create Mapbox directions request
-        let options = RouteOptions(waypoints: waypoints)
-        options.profileIdentifier = .walking
+        let options = RouteOptions(waypoints: waypoints, profileIdentifier: .automobile)
         options.routeShapeResolution = .full
         options.shapeFormat = .polyline6
         options.includesSteps = true
+        options.roadClassesToAvoid = [.ferry, .motorway]
         
         // Request route from Mapbox
         Directions.shared.calculate(options) { [weak self] (session, result) in
