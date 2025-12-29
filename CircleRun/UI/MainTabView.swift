@@ -12,40 +12,19 @@ struct MainTabView: View {
     
     var body: some View {
         TabView(selection: $selectedTab) {
-            // Home tab with ContentView
-            ContentView()
-                .tabItem {
-                    Label("Home", systemImage: "house.fill")
-                }
-                .tag(0)
-            
             // Map tab
             MapboxMapView()
                 .tabItem {
                     Label("Map", systemImage: "map.fill")
                 }
-                .tag(1)
-            
-            // Apple Watch tab
-            AppleWatchView()
-                .tabItem {
-                    Label("Watch", systemImage: "applewatch")
-                }
-                .tag(2)
-            
+                .tag(0)
+
             // Favorites tab with the complete FavoritesView
             FavoritesView()
                 .tabItem {
                     Label("Favorites", systemImage: "star.fill")
                 }
-                .tag(3)
-            
-            // Settings tab
-            SettingsView()
-                .tabItem {
-                    Label("Settings", systemImage: "gear")
-                }
-                .tag(4)
+                .tag(1)
         }
         .accentColor(.blue)
     }

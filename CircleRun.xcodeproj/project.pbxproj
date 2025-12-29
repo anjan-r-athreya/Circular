@@ -10,6 +10,9 @@
 		5810F68F2DFDF2D50047AB4F /* MapboxMaps in Frameworks */ = {isa = PBXBuildFile; productRef = 5810F68E2DFDF2D50047AB4F /* MapboxMaps */; };
 		5810F6912DFDF2FF0047AB4F /* MapboxNavigation in Frameworks */ = {isa = PBXBuildFile; productRef = 5810F6902DFDF2FF0047AB4F /* MapboxNavigation */; };
 		5810F6932DFDF3030047AB4F /* MapboxCoreNavigation in Frameworks */ = {isa = PBXBuildFile; productRef = 5810F6922DFDF3030047AB4F /* MapboxCoreNavigation */; };
+		589CE84D2E34591700F1B183 /* CoreGPX in Frameworks */ = {isa = PBXBuildFile; productRef = 589CE84C2E34591700F1B183 /* CoreGPX */; };
+		589CE8512E345A4100F1B183 /* GEOSwift in Frameworks */ = {isa = PBXBuildFile; productRef = 589CE8502E345A4100F1B183 /* GEOSwift */; };
+		589CE8532E345D7300F1B183 /* SwiftGraph in Frameworks */ = {isa = PBXBuildFile; productRef = 589CE8522E345D7300F1B183 /* SwiftGraph */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -97,6 +100,9 @@
 				5810F68F2DFDF2D50047AB4F /* MapboxMaps in Frameworks */,
 				5810F6932DFDF3030047AB4F /* MapboxCoreNavigation in Frameworks */,
 				5810F6912DFDF2FF0047AB4F /* MapboxNavigation in Frameworks */,
+				589CE8512E345A4100F1B183 /* GEOSwift in Frameworks */,
+				589CE84D2E34591700F1B183 /* CoreGPX in Frameworks */,
+				589CE8532E345D7300F1B183 /* SwiftGraph in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -250,6 +256,9 @@
 			packageReferences = (
 				5853B4642DFDE9FB005B8B8D /* XCRemoteSwiftPackageReference "mapbox-maps-ios" */,
 				5823C5512DFDEC44005E00A4 /* XCRemoteSwiftPackageReference "mapbox-navigation-ios" */,
+				589CE84B2E34591700F1B183 /* XCRemoteSwiftPackageReference "CoreGPX" */,
+				589CE84E2E34595700F1B183 /* XCRemoteSwiftPackageReference "SwiftGraph" */,
+				589CE84F2E345A4100F1B183 /* XCRemoteSwiftPackageReference "GEOSwift" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 586E7EC62D9F2839001AA092 /* Products */;
@@ -710,6 +719,30 @@
 				minimumVersion = 10.12.1;
 			};
 		};
+		589CE84B2E34591700F1B183 /* XCRemoteSwiftPackageReference "CoreGPX" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/vincentneo/CoreGPX.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.9.3;
+			};
+		};
+		589CE84E2E34595700F1B183 /* XCRemoteSwiftPackageReference "SwiftGraph" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/davecom/SwiftGraph.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 3.1.0;
+			};
+		};
+		589CE84F2E345A4100F1B183 /* XCRemoteSwiftPackageReference "GEOSwift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/GEOSwift/GEOSwift.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 11.2.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -727,6 +760,21 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 5823C5512DFDEC44005E00A4 /* XCRemoteSwiftPackageReference "mapbox-navigation-ios" */;
 			productName = MapboxCoreNavigation;
+		};
+		589CE84C2E34591700F1B183 /* CoreGPX */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 589CE84B2E34591700F1B183 /* XCRemoteSwiftPackageReference "CoreGPX" */;
+			productName = CoreGPX;
+		};
+		589CE8502E345A4100F1B183 /* GEOSwift */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 589CE84F2E345A4100F1B183 /* XCRemoteSwiftPackageReference "GEOSwift" */;
+			productName = GEOSwift;
+		};
+		589CE8522E345D7300F1B183 /* SwiftGraph */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 589CE84E2E34595700F1B183 /* XCRemoteSwiftPackageReference "SwiftGraph" */;
+			productName = SwiftGraph;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
