@@ -74,8 +74,10 @@ class MapboxViewModel: ObservableObject {
                     message += " Removing a scenic stop may also help."
                 }
                 self.errorMessage = message
+                Haptics.error()
 
             case .success(let loop):
+                Haptics.success()
                 self.routeCoordinates = loop.coordinates
                 self.routeDistance = loop.distanceMiles
                 self.displayRoute(coordinates: loop.coordinates)
@@ -190,6 +192,7 @@ class MapboxViewModel: ObservableObject {
         } else {
             selectedSpotIDs.insert(spot.id)
         }
+        Haptics.selection()
     }
     
     // MARK: - Favorites Management
@@ -222,10 +225,7 @@ class MapboxViewModel: ObservableObject {
             saveAsFavorite()
         }
         isFavorited.toggle()
-        
-        // Provide haptic feedback
-        let generator = UINotificationFeedbackGenerator()
-        generator.notificationOccurred(.success)
+        Haptics.success()
     }
     
     private func saveAsFavorite() {
