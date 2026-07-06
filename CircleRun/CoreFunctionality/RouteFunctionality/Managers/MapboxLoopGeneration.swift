@@ -153,6 +153,7 @@ final class MapboxLoopGenerator {
                                targetMiles: Double,
                                preferences: LoopPreferences = LoopPreferences(),
                                viaSpots: [CLLocationCoordinate2D] = [],
+                               progress: (@MainActor (String) -> Void)? = nil,
                                completion: @escaping (Result<GeneratedLoop, Error>) -> Void) {
         // A new request supersedes any in-flight one (e.g. rapid shuffle taps).
         generationTask?.cancel()
@@ -163,7 +164,8 @@ final class MapboxLoopGenerator {
                 let loop = try await self.findBestLoop(from: start,
                                                        targetMeters: targetMeters,
                                                        preferences: preferences,
-                                                       viaSpots: viaSpots)
+                                                       viaSpots: viaSpots,
+                                                       progress: progress)
                 guard !Task.isCancelled else { return }
                 await MainActor.run { completion(.success(loop)) }
                 self.exportGPXFile(coordinates: loop.coordinates, distance: loop.distanceMiles)
@@ -203,17 +205,25 @@ final class MapboxLoopGenerator {
         return lhs.score < rhs.score
     }
 
+    /// Pushes a human-readable stage description to the UI, if anyone listens.
+    private func report(_ progress: (@MainActor (String) -> Void)?, _ message: String) async {
+        guard let progress else { return }
+        await MainActor.run { progress(message) }
+    }
+
     private func findBestLoop(from start: CLLocationCoordinate2D,
                               targetMeters: Double,
                               preferences: LoopPreferences,
-                              viaSpots: [CLLocationCoordinate2D]) async throws -> GeneratedLoop {
+                              viaSpots: [CLLocationCoordinate2D],
+                              progress: (@MainActor (String) -> Void)? = nil) async throws -> GeneratedLoop {
         // Loops through chosen scenic spots are anchored to those spots rather
         // than searched across compass directions.
         if !viaSpots.isEmpty {
             return try await findBestSpotLoop(from: start,
                                               targetMeters: targetMeters,
                                               preferences: preferences,
-                                              spots: viaSpots)
+                                              spots: viaSpots,
+                                              progress: progress)
         }
 
         let config = configuration
@@ -241,12 +251,14 @@ final class MapboxLoopGenerator {
             let bearing = (baseBearing + offset + 360).truncatingRemainder(dividingBy: 360)
             let clockwise = Bool.random()
             let allowed = min(config.maxRequestsPerBearing, budget)
+            await report(progress, "Exploring \(compassName(bearing))…")
             let (candidate, used) = await calibrate(
                 initialParameter: targetMeters / (2 * Double.pi) / config.windingFactor,
                 allowance: allowed,
                 targetMeters: targetMeters,
                 preferences: preferences,
-                label: "bearing \(Int(bearing))°"
+                label: "bearing \(Int(bearing))°",
+                progress: progress
             ) { radius in
                 self.circleWaypoints(from: start, bearing: bearing, clockwise: clockwise, radius: radius)
             }
@@ -289,11 +301,13 @@ final class MapboxLoopGenerator {
     private func findBestSpotLoop(from start: CLLocationCoordinate2D,
                                   targetMeters: Double,
                                   preferences: LoopPreferences,
-                                  spots: [CLLocationCoordinate2D]) async throws -> GeneratedLoop {
+                                  spots: [CLLocationCoordinate2D],
+                                  progress: (@MainActor (String) -> Void)? = nil) async throws -> GeneratedLoop {
         let config = configuration
         var best: Candidate?
         var budget = config.totalRequestBudget
 
+        await report(progress, "Weaving in your scenic stops…")
         for clockwise in [true, false].shuffled() {
             try Task.checkCancellation()
             guard budget > 0 else { break }
@@ -304,7 +318,8 @@ final class MapboxLoopGenerator {
                 allowance: allowed,
                 targetMeters: targetMeters,
                 preferences: preferences,
-                label: clockwise ? "spots cw" : "spots ccw"
+                label: clockwise ? "spots cw" : "spots ccw",
+                progress: progress
             ) { scale in
                 self.spotWaypoints(from: start, spots: spots, clockwise: clockwise,
                                    fillerScale: scale, targetMeters: targetMeters)
@@ -342,6 +357,7 @@ final class MapboxLoopGenerator {
                            targetMeters: Double,
                            preferences: LoopPreferences,
                            label: String,
+                           progress: (@MainActor (String) -> Void)? = nil,
                            makeWaypoints: (Double) -> [Waypoint]) async -> (Candidate?, Int) {
         let config = configuration
         var parameter = initialParameter
@@ -351,6 +367,9 @@ final class MapboxLoopGenerator {
         while used < allowance {
             if Task.isCancelled { return (best, used) }
             used += 1
+            if used > 1 {
+                await report(progress, "Dialing in the distance…")
+            }
 
             guard let loop = await requestRoute(waypoints: makeWaypoints(parameter),
                                                 preferences: preferences,
@@ -693,6 +712,14 @@ final class MapboxLoopGenerator {
 
         result.append(coordinates[coordinates.count - 1])
         return result
+    }
+
+    /// Eight-wind compass name for progress messages ("Exploring northeast…").
+    private func compassName(_ bearing: Double) -> String {
+        let names = ["north", "northeast", "east", "southeast",
+                     "south", "southwest", "west", "northwest"]
+        let index = Int(((bearing + 22.5).truncatingRemainder(dividingBy: 360)) / 45)
+        return names[index]
     }
 
     // MARK: - Geometry helpers

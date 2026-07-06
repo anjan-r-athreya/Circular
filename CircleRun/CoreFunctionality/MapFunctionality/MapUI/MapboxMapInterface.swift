@@ -160,6 +160,9 @@ enum MapboxMapInterface {
         static let loopGeneratorTitle = "Generate Loop"
         static let favoriteAdded = "Route added to favorites"
         static let favoriteRemoved = "Route removed from favorites"
+        static let generationFailedTitle = "No Loop Found"
+        static let tryAgainButton = "Try Again"
+        static let okButton = "OK"
     }
 
     // MARK: - Presentation

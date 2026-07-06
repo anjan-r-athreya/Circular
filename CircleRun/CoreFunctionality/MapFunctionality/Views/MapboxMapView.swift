@@ -79,7 +79,9 @@ struct MapboxMapView: View {
             }
 
             if viewModel.isGeneratingRoute {
-                loadingOverlay(MapboxMapInterface.Text.generatingRoute)
+                loadingOverlay(viewModel.generationStatus.isEmpty
+                               ? MapboxMapInterface.Text.generatingRoute
+                               : viewModel.generationStatus)
             } else if viewModel.isLoadingSpots {
                 loadingOverlay(MapboxMapInterface.Text.scenicSpotsLoading)
             }
@@ -90,8 +92,17 @@ struct MapboxMapView: View {
         .fullScreenCover(isPresented: $showingRunNavigation) {
             NavigationInterface(route: generatedRoute)
         }
-        .alert("Error", isPresented: .constant(viewModel.errorMessage != nil)) {
-            Button(MapboxMapInterface.Text.cancelButton) {
+        .alert(MapboxMapInterface.Text.generationFailedTitle,
+               isPresented: .constant(viewModel.errorMessage != nil)) {
+            // A different direction often succeeds where the last one failed,
+            // so offer the retry right in the alert.
+            if viewModel.lastTargetMiles != nil {
+                Button(MapboxMapInterface.Text.tryAgainButton) {
+                    viewModel.errorMessage = nil
+                    viewModel.regenerateLoop()
+                }
+            }
+            Button(MapboxMapInterface.Text.okButton, role: .cancel) {
                 viewModel.errorMessage = nil
             }
         } message: {
@@ -226,7 +237,7 @@ struct MapboxMapView: View {
                     .font(MapboxMapInterface.Typography.headline)
                     .foregroundColor(MapboxMapInterface.Colors.text)
 
-                Text(String(format: "%.2f miles", viewModel.routeDistance))
+                Text(distanceLine)
                     .font(MapboxMapInterface.Typography.subheadline)
                     .foregroundColor(MapboxMapInterface.Colors.secondaryText)
 
@@ -238,25 +249,28 @@ struct MapboxMapView: View {
             Spacer()
 
             HStack(spacing: MapboxMapInterface.Layout.spacing.medium) {
-                // Shuffle button: new loop, same distance, different direction
-                Button(action: {
-                    viewModel.regenerateLoop()
-                }) {
-                    Image(systemName: MapboxMapInterface.Controls.Icons.shuffle)
-                        .font(.system(size: MapboxMapInterface.Layout.size.iconSize))
-                        .foregroundColor(MapboxMapInterface.Colors.text)
-                        .frame(
-                            width: MapboxMapInterface.Layout.size.controlButton,
-                            height: MapboxMapInterface.Layout.size.controlButton
-                        )
-                        .background(MapboxMapInterface.Colors.controlBackground)
-                        .clipShape(Circle())
-                        .shadow(
-                            color: MapboxMapInterface.Colors.Effects.inactiveGlow,
-                            radius: MapboxMapInterface.Layout.size.glowRadius,
-                            x: 0,
-                            y: 0
-                        )
+                // Shuffle button: new loop, same distance, different direction.
+                // Hidden for loaded favorites — there's no target to redo.
+                if viewModel.lastTargetMiles != nil {
+                    Button(action: {
+                        viewModel.regenerateLoop()
+                    }) {
+                        Image(systemName: MapboxMapInterface.Controls.Icons.shuffle)
+                            .font(.system(size: MapboxMapInterface.Layout.size.iconSize))
+                            .foregroundColor(MapboxMapInterface.Colors.text)
+                            .frame(
+                                width: MapboxMapInterface.Layout.size.controlButton,
+                                height: MapboxMapInterface.Layout.size.controlButton
+                            )
+                            .background(MapboxMapInterface.Colors.controlBackground)
+                            .clipShape(Circle())
+                            .shadow(
+                                color: MapboxMapInterface.Colors.Effects.inactiveGlow,
+                                radius: MapboxMapInterface.Layout.size.glowRadius,
+                                x: 0,
+                                y: 0
+                            )
+                    }
                 }
 
                 // Favorite button
@@ -509,6 +523,17 @@ struct MapboxMapView: View {
         return "\(MapboxMapInterface.Text.createRouteButton) (\(count))"
     }
     
+    /// Route distance, owning the difference from what was asked for when
+    /// there is one — "4.87 mi · asked for 5.0" builds more trust than hiding it.
+    private var distanceLine: String {
+        let actual = viewModel.routeDistance
+        if let requested = viewModel.lastTargetMiles,
+           abs(actual - requested) >= 0.05 {
+            return String(format: "%.2f mi · asked for %.1f", actual, requested)
+        }
+        return String(format: "%.2f miles", actual)
+    }
+
     private func paceString(_ minutesPerMile: Double) -> String {
         let minutes = Int(minutesPerMile)
         let seconds = Int((minutesPerMile - Double(minutes)) * 60)

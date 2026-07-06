@@ -15,6 +15,8 @@ class MapboxViewModel: ObservableObject {
     @Published var is3DEnabled: Bool = false
     @Published var isTrackingLocation: Bool = false
     @Published var isGeneratingRoute: Bool = false
+    /// Live description of what the generator is doing, shown on the loading overlay.
+    @Published var generationStatus: String = ""
     @Published var routeCoordinates: [CLLocationCoordinate2D] = []
     @Published var routeDistance: Double = 0.0
     @Published var errorMessage: String?
@@ -48,6 +50,7 @@ class MapboxViewModel: ObservableObject {
         clearRouteLayers()
 
         isGeneratingRoute = true
+        generationStatus = MapboxMapInterface.Text.generatingRoute
         errorMessage = nil
 
         let includedSpots = scenicSpots.filter { selectedSpotIDs.contains($0.id) }
@@ -56,7 +59,10 @@ class MapboxViewModel: ObservableObject {
             from: location,
             targetMiles: targetMiles,
             preferences: .fromUserDefaults(),
-            viaSpots: includedSpots.map { $0.coordinate }
+            viaSpots: includedSpots.map { $0.coordinate },
+            progress: { [weak self] stage in
+                self?.generationStatus = stage
+            }
         ) { [weak self] result in
             guard let self = self else { return }
             self.isGeneratingRoute = false
@@ -192,6 +198,9 @@ class MapboxViewModel: ObservableObject {
         // Clear existing route
         routeCoordinates = []
         routeDistance = 0.0
+        // A favorite wasn't generated to a target, so there's no distance to
+        // compare against and nothing for the shuffle button to redo.
+        lastTargetMiles = nil
         clearRouteLayers()
         
         // Load the route
