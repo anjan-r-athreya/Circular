@@ -231,6 +231,38 @@ struct MapboxMapView: View {
     }
     
     private var routeInfoCard: some View {
+        VStack(spacing: MapboxMapInterface.Layout.spacing.medium) {
+            routeInfoHeader
+
+            // Elevation strip slides in once its background fetch lands.
+            if !viewModel.routeElevations.isEmpty {
+                ElevationProfileView(
+                    elevations: viewModel.routeElevations,
+                    miles: viewModel.routeDistance
+                )
+                .transition(.opacity.combined(with: .move(edge: .bottom)))
+            }
+        }
+        .animation(MapboxMapInterface.Animation.spring, value: viewModel.routeElevations.isEmpty)
+        .padding(MapboxMapInterface.Layout.padding.card)
+        .background(
+            MapboxMapInterface.Colors.controlBackground
+                .overlay(
+                    RoundedRectangle(cornerRadius: MapboxMapInterface.Layout.cornerRadius.medium)
+                        .stroke(MapboxMapInterface.Colors.primary.opacity(0.3), lineWidth: 1)
+                )
+        )
+        .cornerRadius(MapboxMapInterface.Layout.cornerRadius.medium)
+        .shadow(
+            color: MapboxMapInterface.Shadows.glow.color,
+            radius: MapboxMapInterface.Shadows.glow.radius,
+            x: MapboxMapInterface.Shadows.glow.x,
+            y: MapboxMapInterface.Shadows.glow.y
+        )
+        .padding()
+    }
+
+    private var routeInfoHeader: some View {
         HStack {
             VStack(alignment: .leading, spacing: MapboxMapInterface.Layout.spacing.small) {
                 Text(MapboxMapInterface.Text.generatedRoute)
@@ -314,24 +346,8 @@ struct MapboxMapView: View {
                 }
             }
         }
-        .padding(MapboxMapInterface.Layout.padding.card)
-        .background(
-            MapboxMapInterface.Colors.controlBackground
-                .overlay(
-                    RoundedRectangle(cornerRadius: MapboxMapInterface.Layout.cornerRadius.medium)
-                        .stroke(MapboxMapInterface.Colors.primary.opacity(0.3), lineWidth: 1)
-                )
-        )
-        .cornerRadius(MapboxMapInterface.Layout.cornerRadius.medium)
-        .shadow(
-            color: MapboxMapInterface.Shadows.glow.color,
-            radius: MapboxMapInterface.Shadows.glow.radius,
-            x: MapboxMapInterface.Shadows.glow.x,
-            y: MapboxMapInterface.Shadows.glow.y
-        )
-        .padding()
     }
-    
+
     private func loadingOverlay(_ message: String) -> some View {
         ZStack {
             MapboxMapInterface.Colors.overlay

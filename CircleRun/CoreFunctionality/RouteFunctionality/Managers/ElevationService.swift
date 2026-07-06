@@ -13,34 +13,47 @@ import CoreLocation
 final class ElevationService {
     static let shared = ElevationService()
 
-    private let cache = NSCache<NSString, NSNumber>()
+    private let cache = NSCache<NSString, NSArray>()
 
     private init() {}
 
-    /// Total climbing over the route, in meters. Uses ~75 evenly spaced
-    /// samples and light smoothing so DEM noise doesn't inflate the number.
-    func gainMeters(for coordinates: [CLLocationCoordinate2D]) async -> Double? {
+    /// Smoothed elevation samples (~75, evenly spaced along the route), in
+    /// meters. Light smoothing keeps DEM noise from inflating gain numbers
+    /// and jagging up the profile chart.
+    func profile(for coordinates: [CLLocationCoordinate2D]) async -> [Double]? {
         guard coordinates.count > 1 else { return nil }
 
         let samples = resample(coordinates, maxPoints: 75)
         let key = cacheKey(for: samples)
-        if let cached = cache.object(forKey: key) { return cached.doubleValue }
+        if let cached = cache.object(forKey: key) as? [Double] { return cached }
 
         guard let elevations = await fetchElevations(for: samples),
               elevations.count == samples.count else { return nil }
 
-        // 3-point moving average, then sum the positive deltas.
+        // 3-point moving average.
         var smoothed: [Double] = []
         for i in 0..<elevations.count {
             let lo = max(0, i - 1), hi = min(elevations.count - 1, i + 1)
             smoothed.append(elevations[lo...hi].reduce(0, +) / Double(hi - lo + 1))
         }
-        var gain = 0.0
-        for i in 0..<(smoothed.count - 1) {
-            gain += max(0, smoothed[i + 1] - smoothed[i])
-        }
 
-        cache.setObject(NSNumber(value: gain), forKey: key)
+        cache.setObject(smoothed as NSArray, forKey: key)
+        return smoothed
+    }
+
+    /// Total climbing over the route, in meters: the positive deltas of the
+    /// smoothed profile.
+    func gainMeters(for coordinates: [CLLocationCoordinate2D]) async -> Double? {
+        guard let profile = await profile(for: coordinates) else { return nil }
+        return Self.gainMeters(ofProfile: profile)
+    }
+
+    static func gainMeters(ofProfile profile: [Double]) -> Double {
+        guard profile.count > 1 else { return 0 }
+        var gain = 0.0
+        for i in 0..<(profile.count - 1) {
+            gain += max(0, profile[i + 1] - profile[i])
+        }
         return gain
     }
 

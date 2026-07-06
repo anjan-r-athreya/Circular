@@ -19,6 +19,8 @@ class MapboxViewModel: ObservableObject {
     @Published var generationStatus: String = ""
     @Published var routeCoordinates: [CLLocationCoordinate2D] = []
     @Published var routeDistance: Double = 0.0
+    /// Smoothed elevation samples for the displayed route; empty until fetched.
+    @Published var routeElevations: [Double] = []
     @Published var errorMessage: String?
     @Published var isFavorited: Bool = false
     
@@ -32,6 +34,9 @@ class MapboxViewModel: ObservableObject {
     private var routeAnnotation: PolylineAnnotation?
     private var spotAnnotationManager: PointAnnotationManager?
     @Published private(set) var lastTargetMiles: Double?
+    /// Bumped whenever the displayed route changes, so a slow elevation fetch
+    /// for an old route can't land on a new one.
+    private var routeGeneration = 0
 
     // MARK: - Route Generation
 
@@ -82,6 +87,7 @@ class MapboxViewModel: ObservableObject {
                 self.routeDistance = loop.distanceMiles
                 self.displayRoute(coordinates: loop.coordinates)
                 self.displaySpotMarkers(for: includedSpots)
+                self.fetchElevationProfile(for: loop.coordinates)
 
                 if let bounds = self.calculateBounds(from: loop.coordinates) {
                     self.centerMap(on: bounds)
@@ -210,6 +216,7 @@ class MapboxViewModel: ObservableObject {
         routeCoordinates = route.path
         routeDistance = route.distance
         displayRoute(coordinates: route.path)
+        fetchElevationProfile(for: route.path)
         isFavorited = true
         
         // Center map on route
@@ -249,8 +256,26 @@ class MapboxViewModel: ObservableObject {
         )
     }
     
+    // MARK: - Elevation
+
+    /// Loads the elevation strip for the displayed route in the background;
+    /// the card just shows without it until (and unless) the fetch lands.
+    private func fetchElevationProfile(for coordinates: [CLLocationCoordinate2D]) {
+        routeGeneration += 1
+        let generation = routeGeneration
+        routeElevations = []
+
+        Task { [weak self] in
+            guard let profile = await ElevationService.shared.profile(for: coordinates) else { return }
+            await MainActor.run {
+                guard let self, self.routeGeneration == generation else { return }
+                self.routeElevations = profile
+            }
+        }
+    }
+
     // MARK: - Map Interaction
-    
+
     func centerOnUser() {
         guard let mapView = mapViewController?.mapView else { return }
         isTrackingLocation.toggle()
