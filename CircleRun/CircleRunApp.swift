@@ -12,15 +12,29 @@ import CoreLocation
 @main
 struct CircleRunApp: App {
     @UIApplicationDelegateAdaptor private var appDelegate: AppDelegate
-    
+    @AppStorage("hasCompletedIntro") private var hasCompletedIntro = false
+
     init() {
         // Configure Mapbox
         MapboxConfig.configure()
     }
-    
+
     var body: some Scene {
         WindowGroup {
-            MainTabView()
+            ZStack {
+                MainTabView()
+
+                // One-time interactive intro on first launch
+                if !hasCompletedIntro {
+                    IntroView {
+                        withAnimation(.easeOut(duration: 0.5)) {
+                            hasCompletedIntro = true
+                        }
+                    }
+                    .transition(.opacity)
+                    .zIndex(1)
+                }
+            }
         }
     }
 }
