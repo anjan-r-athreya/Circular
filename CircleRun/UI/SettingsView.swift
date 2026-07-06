@@ -14,6 +14,7 @@ struct SettingsView: View {
     @AppStorage("terrainPreference") private var terrainPreference: String = LoopPreferences.Terrain.any.rawValue
     /// 0 means no limit.
     @AppStorage("maxElevationGainFeet") private var maxElevationGainFeet: Double = 0
+    @AppStorage("hasCompletedIntro") private var hasCompletedIntro = false
 
     var body: some View {
         NavigationStack {
@@ -86,6 +87,17 @@ struct SettingsView: View {
                     Text("Terrain & Elevation")
                 } footer: {
                     Text("Generated loops are steered toward the chosen terrain and kept under the climb limit. Slide to zero for no limit.")
+                }
+
+                Section {
+                    Button("Replay intro") {
+                        withAnimation(.easeOut(duration: 0.5)) {
+                            hasCompletedIntro = false
+                        }
+                    }
+                    .foregroundColor(MapboxMapInterface.Colors.primary)
+                } footer: {
+                    Text("Show the first-launch walkthrough again.")
                 }
             }
             .navigationTitle(MapboxMapInterface.Text.settingsTitle)
