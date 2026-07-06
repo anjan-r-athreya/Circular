@@ -119,7 +119,10 @@ enum MapboxMapInterface {
         static let sliderRange: ClosedRange<Double> = 1...50
         static let sliderStep: Double = 0.5
         static let defaultMiles: Double = 3.0
-        
+        static let paceRange: ClosedRange<Double> = 5...16
+        static let paceStep: Double = 0.25
+        static let defaultPaceMinPerMile: Double = 10.0
+
         enum Icons {
             static let search = "magnifyingglass"
             static let location = "location.fill"
@@ -128,9 +131,10 @@ enum MapboxMapInterface {
             static let view3D = "view.3d"
             static let loop = "circle.dashed"
             static let map = "map"
+            static let shuffle = "arrow.triangle.2.circlepath"
         }
     }
-    
+
     // MARK: - Text
     enum Text {
         static let searchPlaceholder = "Generate a loop run"
@@ -140,14 +144,27 @@ enum MapboxMapInterface {
         static let generateButton = "Generate Loop"
         static let cancelButton = "Cancel"
         static let distancePrompt = "How far would you like to run?"
+        static let pacePrompt = "Your pace"
+        static let safePathsToggle = "Prefer sidewalks & trails"
+        static let safePathsDetail = "Keeps the route on walkways and paths, away from alleys and busy streets"
+        static let headingPrompt = "Preferred direction"
+        static let suggestionsTitle = "Scenic spots nearby"
+        static let suggestionsSubtitle = "Add stops to your run, then create the route"
+        static let skipSuggestionsButton = "No Thanks"
+        static let createRouteButton = "Create Route"
+        static let scenicSpotsLoading = "Finding scenic spots nearby…"
+        static let settingsTitle = "Settings"
+        static let runningSection = "Running"
+        static let routePreferencesSection = "Route Preferences"
+        static let paceFooter = "Used to estimate how long a generated loop will take."
         static let loopGeneratorTitle = "Generate Loop"
         static let favoriteAdded = "Route added to favorites"
         static let favoriteRemoved = "Route removed from favorites"
     }
-    
+
     // MARK: - Presentation
     enum Presentation {
-        static let loopGeneratorHeight: CGFloat = 250
+        static let loopGeneratorHeight: CGFloat = 480
     }
     
     // MARK: - Location

@@ -24,8 +24,8 @@ class RouteManager {
             id: UUID(),
             name: name,
             path: coordinates,
-            runCount: 1,
-            bestTime: runTime,
+            runCount: 0,
+            bestTimes: runTime > 0 ? [runTime] : [],
             distance: calculateRouteDistance(coordinates: coordinates)  // Calculate actual distance
         )
         
@@ -59,6 +59,17 @@ class RouteManager {
         NotificationCenter.default.post(name: Notification.Name("FavoritesUpdated"), object: nil)
     }
     
+    /// Records a completed run of a favorited route: bumps its run count and
+    /// slots the time into the route's top three if it qualifies.
+    func recordRun(routeID: UUID, time: TimeInterval) {
+        guard time > 0, var favorites = loadFavorites(),
+              let index = favorites.firstIndex(where: { $0.id == routeID }) else { return }
+
+        favorites[index] = favorites[index].recordingRun(time: time)
+        saveFavoritesToUserDefaults(favorites)
+        NotificationCenter.default.post(name: Notification.Name("FavoritesUpdated"), object: nil)
+    }
+
     // Method to remove a route from favorites
     func removeFromFavorites(name: String, coordinates: [CLLocationCoordinate2D]) {
         guard let favorites = loadFavorites() else { return }
@@ -126,22 +137,30 @@ class RouteManager {
 // Make Route conform to Codable if it isn't already
 extension Route: Codable {
     enum CodingKeys: String, CodingKey {
-        case id, name, runCount, bestTime, distance
+        case id, name, runCount, bestTime, bestTimes, distance
         case path
     }
-    
+
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        id = try container.decode(UUID.self, forKey: .id)
-        name = try container.decode(String.self, forKey: .name)
-        runCount = try container.decode(Int.self, forKey: .runCount)
-        bestTime = try container.decode(TimeInterval.self, forKey: .bestTime)
-        distance = try container.decode(Double.self, forKey: .distance)
-        
+        let id = try container.decode(UUID.self, forKey: .id)
+        let name = try container.decode(String.self, forKey: .name)
+        let runCount = try container.decode(Int.self, forKey: .runCount)
+        let distance = try container.decode(Double.self, forKey: .distance)
+
+        // Newer saves carry the top-three list; older ones just a single time.
+        let bestTimes: [TimeInterval]
+        if let times = try container.decodeIfPresent([TimeInterval].self, forKey: .bestTimes) {
+            bestTimes = times
+        } else {
+            let legacy = try container.decodeIfPresent(TimeInterval.self, forKey: .bestTime) ?? 0
+            bestTimes = legacy > 0 ? [legacy] : []
+        }
+
         // Decode coordinates from custom format
         let coordinateData = try container.decode([String: Double].self, forKey: .path)
         var coords: [CLLocationCoordinate2D] = []
-        
+
         // Pairs of lat/lng values
         for i in 0..<(coordinateData.count / 2) {
             if let lat = coordinateData["lat_\(i)"],
@@ -149,17 +168,19 @@ extension Route: Codable {
                 coords.append(CLLocationCoordinate2D(latitude: lat, longitude: lng))
             }
         }
-        path = coords
+
+        self.init(id: id, name: name, path: coords, runCount: runCount,
+                  bestTimes: bestTimes, distance: distance)
     }
-    
+
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(id, forKey: .id)
         try container.encode(name, forKey: .name)
         try container.encode(runCount, forKey: .runCount)
-        try container.encode(bestTime, forKey: .bestTime)
+        try container.encode(bestTimes, forKey: .bestTimes)
         try container.encode(distance, forKey: .distance)
-        
+
         // Encode coordinates in a format that can be stored
         var coordinateData: [String: Double] = [:]
         for (index, coordinate) in path.enumerated() {

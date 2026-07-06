@@ -16,10 +16,25 @@ struct MapboxMapView: View {
     @State private var showingLoopGenerator = false
     @State private var targetMiles: Double = MapboxMapInterface.Controls.defaultMiles
     @State private var isSearchExpanded = false
+    @State private var showingRunNavigation = false
+    @AppStorage("targetPaceMinPerMile") private var paceMinPerMile: Double = MapboxMapInterface.Controls.defaultPaceMinPerMile
     
     // Compute the vertical offset for side controls based on route existence
     private var sideControlsOffset: CGFloat {
         !viewModel.routeCoordinates.isEmpty ? -100 : 0 // Adjust this value to fine-tune the animation
+    }
+
+    // The current generated loop wrapped as a Route so the run navigation
+    // flow can treat it exactly like a favorite.
+    private var generatedRoute: Route {
+        Route(
+            id: UUID(),
+            name: MapboxMapInterface.Text.generatedRoute,
+            path: viewModel.routeCoordinates,
+            runCount: 0,
+            bestTimes: [],
+            distance: viewModel.routeDistance
+        )
     }
     
     var body: some View {
@@ -59,12 +74,21 @@ struct MapboxMapView: View {
                     ), value: sideControlsOffset)
             }
             
+            if viewModel.showingSuggestions {
+                suggestionsOverlay
+            }
+
             if viewModel.isGeneratingRoute {
-                loadingOverlay
+                loadingOverlay(MapboxMapInterface.Text.generatingRoute)
+            } else if viewModel.isLoadingSpots {
+                loadingOverlay(MapboxMapInterface.Text.scenicSpotsLoading)
             }
         }
         .sheet(isPresented: $showingLoopGenerator) {
             loopGeneratorSheet
+        }
+        .fullScreenCover(isPresented: $showingRunNavigation) {
+            NavigationInterface(route: generatedRoute)
         }
         .alert("Error", isPresented: .constant(viewModel.errorMessage != nil)) {
             Button(MapboxMapInterface.Text.cancelButton) {
@@ -201,15 +225,40 @@ struct MapboxMapView: View {
                 Text(MapboxMapInterface.Text.generatedRoute)
                     .font(MapboxMapInterface.Typography.headline)
                     .foregroundColor(MapboxMapInterface.Colors.text)
-                
+
                 Text(String(format: "%.2f miles", viewModel.routeDistance))
                     .font(MapboxMapInterface.Typography.subheadline)
                     .foregroundColor(MapboxMapInterface.Colors.secondaryText)
+
+                Text("~\(estimatedTimeString(miles: viewModel.routeDistance)) at \(paceString(paceMinPerMile)) /mi")
+                    .font(MapboxMapInterface.Typography.subheadline)
+                    .foregroundColor(MapboxMapInterface.Colors.secondaryText)
             }
-            
+
             Spacer()
-            
+
             HStack(spacing: MapboxMapInterface.Layout.spacing.medium) {
+                // Shuffle button: new loop, same distance, different direction
+                Button(action: {
+                    viewModel.regenerateLoop()
+                }) {
+                    Image(systemName: MapboxMapInterface.Controls.Icons.shuffle)
+                        .font(.system(size: MapboxMapInterface.Layout.size.iconSize))
+                        .foregroundColor(MapboxMapInterface.Colors.text)
+                        .frame(
+                            width: MapboxMapInterface.Layout.size.controlButton,
+                            height: MapboxMapInterface.Layout.size.controlButton
+                        )
+                        .background(MapboxMapInterface.Colors.controlBackground)
+                        .clipShape(Circle())
+                        .shadow(
+                            color: MapboxMapInterface.Colors.Effects.inactiveGlow,
+                            radius: MapboxMapInterface.Layout.size.glowRadius,
+                            x: 0,
+                            y: 0
+                        )
+                }
+
                 // Favorite button
                 Button(action: {
                     viewModel.toggleFavorite()
@@ -231,9 +280,9 @@ struct MapboxMapView: View {
                         )
                 }
                 
-                // Start button
+                // Start button: launches the same 3D run navigation favorites use
                 Button(action: {
-                    // Start navigation action
+                    showingRunNavigation = true
                 }) {
                     Text(MapboxMapInterface.Text.startButton)
                         .font(MapboxMapInterface.Typography.buttonText)
@@ -269,16 +318,16 @@ struct MapboxMapView: View {
         .padding()
     }
     
-    private var loadingOverlay: some View {
+    private func loadingOverlay(_ message: String) -> some View {
         ZStack {
             MapboxMapInterface.Colors.overlay
-            
+
             VStack(spacing: MapboxMapInterface.Layout.spacing.medium) {
                 ProgressView()
                     .scaleEffect(MapboxMapInterface.Layout.size.loadingIndicator)
                     .tint(MapboxMapInterface.Colors.primary)
-                
-                Text(MapboxMapInterface.Text.generatingRoute)
+
+                Text(message)
                     .font(MapboxMapInterface.Typography.headline)
                     .foregroundColor(MapboxMapInterface.Colors.text)
             }
@@ -307,7 +356,7 @@ struct MapboxMapView: View {
                 Text(MapboxMapInterface.Text.distancePrompt)
                     .font(MapboxMapInterface.Typography.headline)
                     .padding(.top)
-                
+
                 HStack {
                     Slider(
                         value: $targetMiles,
@@ -315,17 +364,21 @@ struct MapboxMapView: View {
                         step: MapboxMapInterface.Controls.sliderStep
                     )
                     .accentColor(MapboxMapInterface.Colors.primary)
-                    
+
                     Text(String(format: "%.1f mi", targetMiles))
                         .font(MapboxMapInterface.Typography.body)
                         .foregroundColor(MapboxMapInterface.Colors.secondaryText)
                         .frame(width: 60)
                 }
                 .padding(.horizontal)
-                
+
+                Text("Estimated time: ~\(estimatedTimeString(miles: targetMiles)) at \(paceString(paceMinPerMile)) /mi")
+                    .font(MapboxMapInterface.Typography.subheadline)
+                    .foregroundColor(MapboxMapInterface.Colors.secondaryText)
+
                 Button(action: {
-                    viewModel.generateLoop(targetMiles: targetMiles)
                     showingLoopGenerator = false
+                    viewModel.beginGenerationFlow(targetMiles: targetMiles)
                 }) {
                     Text(MapboxMapInterface.Text.generateButton)
                         .font(MapboxMapInterface.Typography.buttonText)
@@ -336,7 +389,7 @@ struct MapboxMapView: View {
                         .cornerRadius(MapboxMapInterface.Layout.cornerRadius.medium)
                 }
                 .padding(.horizontal)
-                
+
                 Spacer()
             }
             .navigationTitle(MapboxMapInterface.Text.loopGeneratorTitle)
@@ -349,9 +402,126 @@ struct MapboxMapView: View {
                 }
             }
         }
-        .presentationDetents([.height(MapboxMapInterface.Presentation.loopGeneratorHeight)])
+        .presentationDetents([.height(280)])
+    }
+
+    /// Full-screen overlay of scenic spot suggestion cards shown after the
+    /// user picks a distance and before the route is generated.
+    private var suggestionsOverlay: some View {
+        ZStack(alignment: .bottom) {
+            MapboxMapInterface.Colors.overlay
+                .ignoresSafeArea()
+
+            VStack(alignment: .leading, spacing: MapboxMapInterface.Layout.spacing.medium) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(MapboxMapInterface.Text.suggestionsTitle)
+                        .font(.title3.weight(.bold))
+                        .foregroundColor(MapboxMapInterface.Colors.text)
+
+                    Text(MapboxMapInterface.Text.suggestionsSubtitle)
+                        .font(MapboxMapInterface.Typography.subheadline)
+                        .foregroundColor(MapboxMapInterface.Colors.secondaryText)
+                }
+                .padding(.horizontal)
+
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: MapboxMapInterface.Layout.spacing.medium) {
+                        ForEach(viewModel.scenicSpots) { spot in
+                            ScenicSpotCardView(
+                                spot: spot,
+                                isSelected: viewModel.selectedSpotIDs.contains(spot.id)
+                            ) {
+                                viewModel.toggleSpot(spot)
+                            }
+                        }
+                    }
+                    .padding(.horizontal)
+                    .padding(.vertical, 2)
+                }
+                .frame(maxHeight: UIScreen.main.bounds.height * 0.45)
+
+                // Instant feedback when the selection can't fit the chosen
+                // distance — the route gets extended instead of failing later.
+                if let needed = viewModel.minimumMilesForSelection(),
+                   let target = viewModel.lastTargetMiles,
+                   needed > target {
+                    Label(
+                        String(format: "These stops need about %.1f mi — your %.1f mi route will be extended to fit them.",
+                               needed, target),
+                        systemImage: "info.circle.fill"
+                    )
+                    .font(.caption)
+                    .foregroundColor(.orange)
+                    .padding(.horizontal)
+                }
+
+                HStack(spacing: MapboxMapInterface.Layout.spacing.medium) {
+                    Button(action: {
+                        viewModel.skipSuggestions()
+                    }) {
+                        Text(MapboxMapInterface.Text.skipSuggestionsButton)
+                            .font(MapboxMapInterface.Typography.buttonText)
+                            .foregroundColor(MapboxMapInterface.Colors.text)
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(MapboxMapInterface.Colors.controlBackground)
+                            .cornerRadius(MapboxMapInterface.Layout.cornerRadius.medium)
+                    }
+
+                    Button(action: {
+                        viewModel.confirmSuggestions()
+                    }) {
+                        Text(createRouteLabel)
+                            .font(MapboxMapInterface.Typography.buttonText)
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(MapboxMapInterface.Colors.primary)
+                            .cornerRadius(MapboxMapInterface.Layout.cornerRadius.medium)
+                    }
+                }
+                .padding(.horizontal)
+            }
+            .padding(.vertical)
+            .background(
+                RoundedRectangle(cornerRadius: MapboxMapInterface.Layout.cornerRadius.large)
+                    .fill(MapboxMapInterface.Colors.background.opacity(0.95))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: MapboxMapInterface.Layout.cornerRadius.large)
+                            .stroke(MapboxMapInterface.Colors.primary.opacity(0.3), lineWidth: 1)
+                    )
+            )
+            .padding()
+        }
+    }
+
+    private var createRouteLabel: String {
+        let count = viewModel.selectedSpotIDs.count
+        guard count > 0 else { return MapboxMapInterface.Text.createRouteButton }
+
+        // When the selection forces a longer loop, put the real number on the
+        // button so there's no surprise.
+        if let effective = viewModel.effectiveTargetMiles,
+           let target = viewModel.lastTargetMiles,
+           effective > target {
+            return String(format: "Create ~%.1f mi Route (%d)", effective, count)
+        }
+        return "\(MapboxMapInterface.Text.createRouteButton) (\(count))"
     }
     
+    private func paceString(_ minutesPerMile: Double) -> String {
+        let minutes = Int(minutesPerMile)
+        let seconds = Int((minutesPerMile - Double(minutes)) * 60)
+        return String(format: "%d:%02d", minutes, seconds)
+    }
+
+    private func estimatedTimeString(miles: Double) -> String {
+        let totalMinutes = miles * paceMinPerMile
+        let hours = Int(totalMinutes) / 60
+        let minutes = Int(totalMinutes) % 60
+        return hours > 0 ? "\(hours) hr \(minutes) min" : "\(minutes) min"
+    }
+
     private func mapControlButton(icon: String, isActive: Bool = false, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: icon)

@@ -9,7 +9,7 @@ import SwiftUI
 
 struct MainTabView: View {
     @State private var selectedTab: Int = 0
-    
+
     var body: some View {
         TabView(selection: $selectedTab) {
             // Map tab
@@ -25,8 +25,19 @@ struct MainTabView: View {
                     Label("Favorites", systemImage: "star.fill")
                 }
                 .tag(1)
+
+            // Settings tab: pace and route preferences
+            SettingsView()
+                .tabItem {
+                    Label("Settings", systemImage: "gearshape.fill")
+                }
+                .tag(2)
         }
         .accentColor(.blue)
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("LoadFavoriteRoute"))) { _ in
+            // "Load in Map" needs the map on screen to mean anything.
+            selectedTab = 0
+        }
     }
 }
 

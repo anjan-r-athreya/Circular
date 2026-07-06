@@ -41,6 +41,11 @@ class NavigationManager: NSObject, ObservableObject {
     
     // Navigation state
     @Published var isNavigating: Bool = false
+    /// 3D = pitched chase camera; 2D = flat overhead view.
+    @Published var is3DMode: Bool = true
+    /// While false (the user panned or zoomed), the camera stops chasing the
+    /// runner so the gesture isn't fought.
+    @Published var isFollowingUser: Bool = true
     
     // Private Properties
     private var locationManager = CLLocationManager()
@@ -55,6 +60,7 @@ class NavigationManager: NSObject, ObservableObject {
     
     // Constants for navigation
     private let CAMERA_DISTANCE: CLLocationDistance = 500  // meters
+    private let FLAT_CAMERA_DISTANCE: CLLocationDistance = 1200  // meters, 2D overhead view
     private let CAMERA_PITCH: CGFloat = 60  // degrees
     private let CAMERA_HEADING_OFFSET: CLLocationDirection = 5  // degrees ahead of user heading
     private let TURN_ANNOUNCEMENT_DISTANCE: Double = 100  // meters
@@ -110,6 +116,33 @@ class NavigationManager: NSObject, ObservableObject {
         stopTimer()
         resetStats()
         isNavigating = false
+    }
+
+    /// Switches between the pitched 3D chase camera and a flat 2D overhead
+    /// view, re-aiming the camera immediately if it's following the runner.
+    func toggle3DMode() {
+        is3DMode.toggle()
+        if isFollowingUser, let location = lastLocation {
+            updateCamera(for: location)
+        }
+    }
+
+    /// Re-centers on the runner after the user has panned or zoomed away.
+    func resumeFollowing() {
+        isFollowingUser = true
+        if let location = lastLocation {
+            updateCamera(for: location)
+        }
+    }
+
+    /// Seconds since the run started, for recording finished-run times.
+    var elapsedSeconds: TimeInterval {
+        startTime.map { Date().timeIntervalSince($0) } ?? 0
+    }
+
+    /// Meters actually covered, for judging whether the route was completed.
+    var metersTraveled: CLLocationDistance {
+        distanceTraveled
     }
     
     // MARK: - Private Methods
@@ -287,7 +320,7 @@ class NavigationManager: NSObject, ObservableObject {
     }
     
     private func updateCamera(for location: CLLocation) {
-        guard isNavigating else { return }
+        guard isNavigating, isFollowingUser else { return }
         
         // Calculate position slightly ahead of user
         let bearing = location.course
@@ -314,8 +347,8 @@ class NavigationManager: NSObject, ObservableObject {
         
         camera = MKMapCamera(
             lookingAtCenter: cameraCenter,
-            fromDistance: CAMERA_DISTANCE,
-            pitch: CAMERA_PITCH,
+            fromDistance: is3DMode ? CAMERA_DISTANCE : FLAT_CAMERA_DISTANCE,
+            pitch: is3DMode ? CAMERA_PITCH : 0,
             heading: bearing + CAMERA_HEADING_OFFSET
         )
     }

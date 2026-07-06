@@ -95,28 +95,68 @@ struct NavigationInterface: View {
                 .background(Color.black.opacity(0.75))
             }
             
-            // End Navigation Button
+            // Map controls: end run, 2D/3D toggle, re-center
             VStack {
                 HStack {
                     Spacer()
-                    Button(action: {
-                        navigationManager.stopNavigation()
-                        dismiss()
-                    }) {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 32))
-                            .foregroundColor(.white)
-                            .padding()
+                    VStack(spacing: 12) {
+                        Button(action: {
+                            endRun()
+                        }) {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 32))
+                                .foregroundColor(.white)
+                        }
+
+                        // Toggle between the 3D chase camera and a flat 2D view
+                        Button(action: {
+                            navigationManager.toggle3DMode()
+                        }) {
+                            Image(systemName: navigationManager.is3DMode ? "view.3d" : "view.2d")
+                                .font(.system(size: 18, weight: .semibold))
+                                .foregroundColor(.white)
+                                .frame(width: 40, height: 40)
+                                .background(Color.black.opacity(0.6))
+                                .clipShape(Circle())
+                        }
+
+                        // Shown once the user pans/zooms away from the runner
+                        if !navigationManager.isFollowingUser {
+                            Button(action: {
+                                navigationManager.resumeFollowing()
+                            }) {
+                                Image(systemName: "location.fill")
+                                    .font(.system(size: 18, weight: .semibold))
+                                    .foregroundColor(.white)
+                                    .frame(width: 40, height: 40)
+                                    .background(Color.blue.opacity(0.9))
+                                    .clipShape(Circle())
+                            }
+                        }
                     }
+                    .padding()
                 }
                 Spacer()
             }
+            .padding(.top, 60)
         }
         .onAppear {
             navigationManager.startNavigation(for: route)
         }
     }
-    
+
+    /// Stops navigation, and if the runner actually covered the route (90%+
+    /// of its distance), records the time toward the route's best times.
+    private func endRun() {
+        let elapsed = navigationManager.elapsedSeconds
+        let milesCovered = navigationManager.metersTraveled / 1609.34
+        if milesCovered >= route.distance * 0.9 {
+            RouteManager.shared.recordRun(routeID: route.id, time: elapsed)
+        }
+        navigationManager.stopNavigation()
+        dismiss()
+    }
+
     private func getTurnArrowSystemName(for maneuverType: String, at index: Int) -> String {
         if index < 3 {
             return "arrow.up.circle.fill"

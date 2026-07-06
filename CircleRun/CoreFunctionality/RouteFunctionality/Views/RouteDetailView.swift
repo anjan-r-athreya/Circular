@@ -7,13 +7,21 @@
 
 import SwiftUI
 import MapKit
+import CoreLocation
 
 struct RouteDetailView: View {
     let route: Route
     @Environment(\.dismiss) private var dismiss
     @State private var showingNavigation = false
     @Environment(\.presentationMode) var presentationMode
-    
+
+    // Stats resolved asynchronously when the view appears
+    @State private var startingPoint = "Locating…"
+    @State private var terrain = "…"
+    @State private var difficulty = "…"
+    @State private var elevationGainText = "…"
+    @State private var statsLoaded = false
+
     var body: some View {
         ScrollView {
             VStack(spacing: 20) {
@@ -24,22 +32,24 @@ struct RouteDetailView: View {
                     lineColor: .blue
                 )
                 .clipShape(RoundedRectangle(cornerRadius: 16))
-                
+
                 // Route Stats
                 VStack(spacing: 16) {
                     Text(route.name)
                         .font(.title2)
                         .fontWeight(.bold)
-                    
+
                     HStack(spacing: 40) {
                         StatItem(icon: "figure.run", title: "Runs", value: "\(route.runCount)")
-                        StatItem(icon: "stopwatch", title: "Best Time", value: formatTime(route.bestTime))
-                        StatItem(icon: "map", title: "Distance", value: "2.5 mi") // TODO: Calculate actual distance
+                        StatItem(icon: "stopwatch", title: "Best Time",
+                                 value: route.bestTime > 0 ? formatTime(route.bestTime) : "—")
+                        StatItem(icon: "map", title: "Distance",
+                                 value: String(format: "%.2f mi", route.distance))
                     }
                 }
                 .padding()
                 .background(RoundedRectangle(cornerRadius: 16).fill(.ultraThinMaterial))
-                
+
                 // Action Buttons
                 HStack(spacing: 12) {
                     // Load in Map Button
@@ -58,7 +68,7 @@ struct RouteDetailView: View {
                         .foregroundColor(.white)
                         .clipShape(RoundedRectangle(cornerRadius: 16))
                     }
-                    
+
                     // Start Run Button
                     Button(action: {
                         showingNavigation = true
@@ -76,17 +86,42 @@ struct RouteDetailView: View {
                     }
                 }
                 .padding(.horizontal)
-                
-                // Additional route information
+
+                // Best times podium
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Best Times")
+                        .font(.headline)
+                        .padding(.bottom, 4)
+
+                    if route.bestTimes.isEmpty {
+                        Text("Complete a run of this route to set a time.")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                    } else {
+                        ForEach(0..<3, id: \.self) { rank in
+                            PodiumRow(
+                                rank: rank,
+                                time: rank < route.bestTimes.count
+                                    ? formatTime(route.bestTimes[rank])
+                                    : "—"
+                            )
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding()
+                .background(RoundedRectangle(cornerRadius: 16).fill(.ultraThinMaterial))
+
+                // Route information, computed from the route itself
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Route Information")
                         .font(.headline)
                         .padding(.bottom, 4)
-                    
-                    InfoRow(icon: "map", title: "Starting Point", value: "Marina Green")
-                    InfoRow(icon: "figure.walk", title: "Difficulty", value: "Moderate")
-                    InfoRow(icon: "tree", title: "Terrain", value: "Mixed")
-                    InfoRow(icon: "arrow.up.right", title: "Elevation Gain", value: "125 ft")
+
+                    InfoRow(icon: "map", title: "Starting Point", value: startingPoint)
+                    InfoRow(icon: "figure.walk", title: "Difficulty", value: difficulty)
+                    InfoRow(icon: "tree", title: "Terrain", value: terrain)
+                    InfoRow(icon: "arrow.up.right", title: "Elevation Gain", value: elevationGainText)
                 }
                 .padding()
                 .background(RoundedRectangle(cornerRadius: 16).fill(.ultraThinMaterial))
@@ -97,8 +132,42 @@ struct RouteDetailView: View {
         .fullScreenCover(isPresented: $showingNavigation) {
             NavigationInterface(route: route)
         }
+        .task {
+            await loadStats()
+        }
     }
-    
+
+    // MARK: - Stat loading
+
+    private func loadStats() async {
+        guard !statsLoaded else { return }
+        statsLoaded = true
+
+        // Starting point: reverse-geocode the first coordinate of the loop.
+        if let first = route.path.first {
+            let location = CLLocation(latitude: first.latitude, longitude: first.longitude)
+            let placemark = try? await CLGeocoder().reverseGeocodeLocation(location).first
+            startingPoint = placemark?.thoroughfare
+                ?? placemark?.subLocality
+                ?? placemark?.locality
+                ?? "Unknown"
+        } else {
+            startingPoint = "Unknown"
+        }
+
+        // Terrain, difficulty, and elevation gain from the elevation profile.
+        if let gainMeters = await ElevationService.shared.gainMeters(for: route.path) {
+            elevationGainText = String(format: "%.0f ft", gainMeters * 3.28084)
+            terrain = ElevationService.terrainDescription(gainMeters: gainMeters, miles: route.distance)
+            difficulty = ElevationService.difficultyDescription(gainMeters: gainMeters, miles: route.distance)
+        } else {
+            elevationGainText = "Unavailable"
+            terrain = "Unavailable"
+            // Distance-only fallback when elevation data can't be fetched.
+            difficulty = route.distance < 4 ? "Easy" : route.distance < 8 ? "Moderate" : "Hard"
+        }
+    }
+
     private func formatTime(_ timeInterval: TimeInterval) -> String {
         let formatter = DateComponentsFormatter()
         formatter.allowedUnits = [.hour, .minute, .second]
@@ -112,7 +181,7 @@ private struct StatItem: View {
     let icon: String
     let title: String
     let value: String
-    
+
     var body: some View {
         VStack(spacing: 4) {
             Image(systemName: icon)
@@ -127,11 +196,46 @@ private struct StatItem: View {
     }
 }
 
+private struct PodiumRow: View {
+    let rank: Int
+    let time: String
+
+    private var medalColor: Color {
+        switch rank {
+        case 0: return .yellow
+        case 1: return Color(white: 0.75)
+        default: return Color(red: 0.8, green: 0.5, blue: 0.2)
+        }
+    }
+
+    private var label: String {
+        switch rank {
+        case 0: return "1st"
+        case 1: return "2nd"
+        default: return "3rd"
+        }
+    }
+
+    var body: some View {
+        HStack {
+            Image(systemName: "trophy.fill")
+                .foregroundColor(medalColor)
+                .frame(width: 24)
+            Text(label)
+                .foregroundColor(.secondary)
+            Spacer()
+            Text(time)
+                .fontWeight(.medium)
+                .monospacedDigit()
+        }
+    }
+}
+
 private struct InfoRow: View {
     let icon: String
     let title: String
     let value: String
-    
+
     var body: some View {
         HStack {
             Image(systemName: icon)

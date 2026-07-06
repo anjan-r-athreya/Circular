@@ -43,7 +43,7 @@ struct RouteCardView: View {
                         
                         // Best time
                         Label {
-                            Text(viewModel.formatTime(route.bestTime))
+                            Text(route.bestTime > 0 ? viewModel.formatTime(route.bestTime) : "—")
                                 .foregroundColor(.secondary)
                         } icon: {
                             Image(systemName: "stopwatch")
