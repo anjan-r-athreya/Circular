@@ -26,12 +26,19 @@ struct MainTabView: View {
                 }
                 .tag(1)
 
+            // Activity tab: run history, weekly mileage, streaks
+            ActivityView()
+                .tabItem {
+                    Label("Activity", systemImage: "chart.bar.fill")
+                }
+                .tag(2)
+
             // Settings tab: pace and route preferences
             SettingsView()
                 .tabItem {
                     Label("Settings", systemImage: "gearshape.fill")
                 }
-                .tag(2)
+                .tag(3)
         }
         .accentColor(.blue)
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("LoadFavoriteRoute"))) { _ in
