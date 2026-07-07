@@ -56,7 +56,7 @@ MapboxMaps (10.x), MapboxNavigation + MapboxCoreNavigation (2.x), CoreGPX, Swift
 
 ## Configuration
 
-- Mapbox token: `MapboxConfig.swift` + `MBXAccessToken` in Info.plist; `MapboxConfig.configure()` runs at app init.
+- Mapbox token: lives ONLY in the gitignored `Config/Secrets.xcconfig` (`MAPBOX_ACCESS_TOKEN`); the build injects it into Info.plist's `MBXAccessToken`, and `MapboxConfig.accessToken` reads it from the bundle. Fresh clone: copy `Config/Secrets.example.xcconfig` to `Config/Secrets.xcconfig` and paste a token. Never hardcode tokens in source — GitHub push protection blocks the push.
 - HealthKit: entitlement in `CircleRun/CircleRun.entitlements` (`CODE_SIGN_ENTITLEMENTS` set on the app target); write-only.
 - Background refresh: identifier `com.circlerun.locationupdate` (registered in AppDelegate).
 - Widgets/Live Activity: not yet added — see `docs/LiveActivitySetup.md` for the target-creation steps and starter code.
