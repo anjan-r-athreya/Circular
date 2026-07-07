@@ -10,8 +10,21 @@ import MapboxMaps
 import CoreLocation
 
 enum MapboxConfig {
-    // IMPORTANT: Replace this with your actual Mapbox public access token
-    static let accessToken = "pk.eyJ1IjoiYW5qYW4tci1hdGhyZXlhIiwiYSI6ImNtOWdjanhuNjAyZDQya3B4dDd1OXFpNGQifQ.GJva2IoFhwjXwBRw7nGH2A"
+    /// Read from Info.plist (MBXAccessToken), which the build fills in from
+    /// the gitignored Config/Secrets.xcconfig — the token never lives in
+    /// source control. Missing token: copy Config/Secrets.example.xcconfig
+    /// to Config/Secrets.xcconfig and add yours.
+    static let accessToken: String = {
+        guard let token = Bundle.main.object(forInfoDictionaryKey: "MBXAccessToken") as? String,
+              token.hasPrefix("pk.") else {
+            assertionFailure("""
+                Missing Mapbox token. Copy Config/Secrets.example.xcconfig to \
+                Config/Secrets.xcconfig and set MAPBOX_ACCESS_TOKEN.
+                """)
+            return ""
+        }
+        return token
+    }()
     
     // This method should be called when the app starts
     static func configure() {

@@ -1,0 +1,19 @@
+# Secrets — real tokens live only here, never in source control.
+# Copy Config/Secrets.example.xcconfig to Config/Secrets.xcconfig and fill it in.
+Config/Secrets.xcconfig
+
+# macOS
+.DS_Store
+
+# Xcode
+xcuserdata/
+*.xcuserstate
+DerivedData/
+build/
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Swift Package Manager
+.swiftpm/
+.build/
