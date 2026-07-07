@@ -35,7 +35,6 @@ class MapboxViewModel: ObservableObject {
 
     weak var mapViewController: MapboxViewController?
     private var currentLocation: CLLocation?
-    private var routeAnnotation: PolylineAnnotation?
     private var spotAnnotationManager: PointAnnotationManager?
     private var startPinManager: PointAnnotationManager?
     @Published private(set) var lastTargetMiles: Double?
@@ -380,11 +379,10 @@ class MapboxViewModel: ObservableObject {
     private func displayRoute(coordinates: [CLLocationCoordinate2D]) {
         guard let mapView = mapViewController?.mapView else { return }
         
-        // Remove existing route if any
-        if let _ = routeAnnotation {
-            try? mapView.mapboxMap.style.removeLayer(withId: "route-layer")
-            try? mapView.mapboxMap.style.removeSource(withId: "route-source")
-        }
+        // Remove any existing route first (safe no-ops when absent). The old
+        // guard here checked a property that was never assigned, so it never ran.
+        try? mapView.mapboxMap.style.removeLayer(withId: "route-layer")
+        try? mapView.mapboxMap.style.removeSource(withId: "route-source")
         
         // Create a linestring from the coordinates
         let lineString = LineString(coordinates)

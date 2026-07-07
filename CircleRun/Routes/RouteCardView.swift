@@ -11,7 +11,6 @@ import MapKit
 struct RouteCardView: View {
     let route: Route
     @ObservedObject var viewModel: FavoritesViewModel
-    var onRouteTapped: ((Route) -> Void)? = nil
     
     var body: some View {
         NavigationLink(destination: RouteDetailView(route: route)) {

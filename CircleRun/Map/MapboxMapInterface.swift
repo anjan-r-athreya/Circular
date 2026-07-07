@@ -24,10 +24,6 @@ enum MapboxMapInterface {
                 Color.black.opacity(0.8)
             ])
             
-            static let blueGlow = Gradient(colors: [
-                primary.opacity(0.2),
-                primary.opacity(0.0)
-            ])
         }
         
         enum Effects {
@@ -83,12 +79,6 @@ enum MapboxMapInterface {
             x: 0,
             y: 2
         )
-        static let medium = Shadow(
-            color: Colors.primary.opacity(0.3),
-            radius: 12,
-            x: 0,
-            y: 4
-        )
         static let glow = Shadow(
             color: Colors.primary.opacity(0.4),
             radius: 15,
@@ -111,7 +101,6 @@ enum MapboxMapInterface {
             dampingFraction: 0.8,
             blendDuration: 0.2
         )
-        static let defaultDuration: TimeInterval = 0.5
     }
     
     // MARK: - Controls
@@ -159,17 +148,11 @@ enum MapboxMapInterface {
         static let routePreferencesSection = "Route Preferences"
         static let paceFooter = "Used to estimate how long a generated loop will take."
         static let loopGeneratorTitle = "Generate Loop"
-        static let favoriteAdded = "Route added to favorites"
-        static let favoriteRemoved = "Route removed from favorites"
         static let generationFailedTitle = "No Loop Found"
         static let tryAgainButton = "Try Again"
         static let okButton = "OK"
     }
 
-    // MARK: - Presentation
-    enum Presentation {
-        static let loopGeneratorHeight: CGFloat = 480
-    }
     
     // MARK: - Location
     enum Location {

@@ -11,7 +11,6 @@ import MapKit
 import CoreLocation
 
 class RouteManager {
-    private var isRequestInProgress = false
     static let shared = RouteManager()
 
     init() {

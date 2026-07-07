@@ -33,13 +33,6 @@ enum MapboxConfig {
     }
     
     enum Style {
-        static let streets = StyleURI.streets
-        static let outdoors = StyleURI.outdoors
-        static let satellite = StyleURI.satellite
-        static let satelliteStreets = StyleURI.satelliteStreets
-        static let light = StyleURI.light
-        static let dark = StyleURI.dark
-        
         static func styleURI(for style: MapStyle) -> StyleURI {
             switch style {
             case .streets:
@@ -72,11 +65,5 @@ enum MapboxConfig {
         zoom: 15,
         bearing: 0,
         pitch: 0
-    )
-    
-    static let defaultNavigationCameraOptions = CameraOptions(
-        zoom: 15,
-        bearing: 0,
-        pitch: 45
     )
 }
