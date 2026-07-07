@@ -15,6 +15,7 @@ struct SettingsView: View {
     /// 0 means no limit.
     @AppStorage("maxElevationGainFeet") private var maxElevationGainFeet: Double = 0
     @AppStorage("hasCompletedIntro") private var hasCompletedIntro = false
+    @AppStorage("voiceCuesEnabled") private var voiceCuesEnabled = true
 
     var body: some View {
         NavigationStack {
@@ -38,6 +39,20 @@ struct SettingsView: View {
                     Text(MapboxMapInterface.Text.runningSection)
                 } footer: {
                     Text(MapboxMapInterface.Text.paceFooter)
+                }
+
+                Section {
+                    Toggle(isOn: $voiceCuesEnabled) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Voice announcements")
+                            Text("Turn-by-turn cues and mile splits, spoken during runs")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    .tint(MapboxMapInterface.Colors.primary)
+                } header: {
+                    Text("During Runs")
                 }
 
                 Section {

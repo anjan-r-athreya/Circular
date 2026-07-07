@@ -52,11 +52,26 @@ class NavigationManager: NSObject, ObservableObject {
     private var currentRoute: Route?
     private var routeSteps: [MKRoute.Step] = []
     private var startTime: Date?
+    /// Running time banked before the current segment (pauses split the run
+    /// into segments; only unpaused time counts).
+    private var accumulatedTime: TimeInterval = 0
     private var distanceTraveled: CLLocationDistance = 0
     private var lastLocation: CLLocation?
     private var timer: Timer?
     private var estimatedTotalTime: TimeInterval = 0
     private var averagePace: TimeInterval = 0  // seconds per mile
+    /// Whole miles already announced, so each split fires exactly once.
+    private var announcedMiles = 0
+    /// Kept alive for the duration of an utterance — a local synthesizer can
+    /// deallocate mid-sentence.
+    private let speechSynthesizer = AVSpeechSynthesizer()
+
+    /// Voice announcements (turns and mile splits) honor the Settings toggle.
+    private var voiceCuesEnabled: Bool {
+        UserDefaults.standard.object(forKey: "voiceCuesEnabled") == nil
+            ? true
+            : UserDefaults.standard.bool(forKey: "voiceCuesEnabled")
+    }
     
     // Constants for navigation
     private let CAMERA_DISTANCE: CLLocationDistance = 500  // meters
@@ -135,9 +150,22 @@ class NavigationManager: NSObject, ObservableObject {
         }
     }
 
-    /// Seconds since the run started, for recording finished-run times.
+    /// Unpaused running time, for stats and recording finished-run times.
     var elapsedSeconds: TimeInterval {
-        startTime.map { Date().timeIntervalSince($0) } ?? 0
+        accumulatedTime + (startTime.map { Date().timeIntervalSince($0) } ?? 0)
+    }
+
+    /// Freezes/unfreezes the clock and the distance counter. Location updates
+    /// keep flowing (the map still follows), but paused movement doesn't count.
+    func togglePause() {
+        if runningStats.isPaused {
+            startTime = Date()
+            runningStats.isPaused = false
+        } else {
+            accumulatedTime += startTime.map { Date().timeIntervalSince($0) } ?? 0
+            startTime = nil
+            runningStats.isPaused = true
+        }
     }
 
     /// Meters actually covered, for judging whether the route was completed.
@@ -185,14 +213,16 @@ class NavigationManager: NSObject, ObservableObject {
         runningStats = RunningStats()
         distanceTraveled = 0
         startTime = nil
+        accumulatedTime = 0
+        announcedMiles = 0
         lastLocation = nil
     }
-    
+
     private func updateStats() {
-        guard let startTime = startTime, !runningStats.isPaused else { return }
-        
+        guard !runningStats.isPaused else { return }
+
         // Update elapsed time
-        let elapsed = Date().timeIntervalSince(startTime)
+        let elapsed = elapsedSeconds
         runningStats.elapsedTime = formatDuration(elapsed)
         
         // Update pace
@@ -305,14 +335,12 @@ class NavigationManager: NSObject, ObservableObject {
     }
     
     private func updateEstimatedFinishTime() {
-        guard let startTime = startTime else { return }
-        
         let remainingDistance = (currentRoute?.distance ?? 0) - (distanceTraveled / 1609.34)
         if remainingDistance > 0 {
             // Calculate based on current pace if available, otherwise use target pace
             let timeRemaining = (averagePace > 0 ? averagePace : 600) * remainingDistance
-            let estimatedFinish = Date(timeInterval: timeRemaining, since: startTime)
-            
+            let estimatedFinish = Date().addingTimeInterval(timeRemaining)
+
             let formatter = DateFormatter()
             formatter.dateFormat = "HH:mm"
             runningStats.estimatedFinishTime = formatter.string(from: estimatedFinish)
@@ -394,11 +422,30 @@ class NavigationManager: NSObject, ObservableObject {
     
     private func announceNextTurn() {
         guard let instruction = currentInstruction else { return }
-        let synthesizer = AVSpeechSynthesizer()
-        let utterance = AVSpeechUtterance(string: instruction.text)
+        speak(instruction.text)
+    }
+
+    /// Celebrates a completed mile: heavy haptic plus a spoken split.
+    private func announceMileSplit(mile: Int) {
+        Haptics.milestone()
+
+        let elapsed = elapsedSeconds
+        let paceSeconds = elapsed / Double(mile)
+        let paceMinutes = Int(paceSeconds) / 60
+        let paceRemainder = Int(paceSeconds) % 60
+        let elapsedMinutes = Int(elapsed) / 60
+        let elapsedRemainder = Int(elapsed) % 60
+
+        speak("Mile \(mile). Time \(elapsedMinutes) minutes \(elapsedRemainder) seconds. " +
+              "Average pace \(paceMinutes) \(String(format: "%02d", paceRemainder)) per mile.")
+    }
+
+    private func speak(_ text: String) {
+        guard voiceCuesEnabled else { return }
+        let utterance = AVSpeechUtterance(string: text)
         utterance.rate = 0.5
         utterance.volume = 1.0
-        synthesizer.speak(utterance)
+        speechSynthesizer.speak(utterance)
     }
 }
 
@@ -412,11 +459,18 @@ extension NavigationManager: CLLocationManagerDelegate {
         // Update distance traveled
         if let lastLocation = lastLocation {
             distanceTraveled += location.distance(from: lastLocation)
-            
+
             // Update remaining distance
             if let route = currentRoute {
                 let remainingMiles = route.distance - (distanceTraveled / 1609.34)
                 runningStats.remainingDistance = String(format: "%.1f mi", max(0, remainingMiles))
+            }
+
+            // Mile split: announce each whole mile exactly once.
+            let wholeMiles = Int(distanceTraveled / 1609.34)
+            if wholeMiles > announcedMiles {
+                announcedMiles = wholeMiles
+                announceMileSplit(mile: wholeMiles)
             }
         }
         lastLocation = location
