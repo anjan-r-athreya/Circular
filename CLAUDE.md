@@ -20,6 +20,15 @@ Dependencies resolve via Swift Package Manager on first build. The Xcode project
 
 ## Architecture
 
+### Source layout (feature folders under `CircleRun/`)
+- `App/` — entry point + AppDelegate, tab shell, intro, settings
+- `Map/` — map screen, its view model, Mapbox config, design constants (`MapboxMapInterface`), snapshot view
+- `RouteGeneration/` — loop generator, elevation + scenic-spot services, generation-time views (spot cards, elevation strip)
+- `Routes/` — `Route` model, `RouteManager` persistence, favorites list/detail/cards
+- `RunTracking/` — run navigation UI + manager, `RunStore` history, Activity tab, HealthKit sync
+- `Weather/` — run-conditions nudge service
+- `Support/` — haptics, GPX sharing
+
 ### Route generation (`MapboxLoopGeneration.swift`)
 The generator places the start point ON a circle of waypoints (center offset from the runner) so routes are genuine loops, not lollipops. Per attempt it:
 1. Tries several compass bearings (clustered around a heading preference, or spread from a random base so shuffles differ).
