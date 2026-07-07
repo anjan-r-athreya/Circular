@@ -12,12 +12,24 @@ import CoreLocation
 import MapKit
 import UIKit
 
-final class SpotPhotoService {
+// An actor so concurrent card loads serialize their claims on photo
+// sources — nearby spots share the same Wikipedia geosearch results, and
+// without claiming, several cards end up wearing the same closest-article
+// photo.
+actor SpotPhotoService {
     static let shared = SpotPhotoService()
 
     private let cache = NSCache<NSString, UIImage>()
+    /// Wikipedia image URLs already used by a spot in the current batch.
+    private var claimedSources = Set<String>()
 
     private init() {}
+
+    /// Called when a fresh set of suggestions is fetched, so photo claims
+    /// from the previous batch don't starve the new one.
+    func beginBatch() {
+        claimedSources.removeAll()
+    }
 
     func photo(for spot: ScenicSpot, size: CGSize) async -> UIImage? {
         if let cached = cache.object(forKey: spot.id as NSString) { return cached }
@@ -28,6 +40,7 @@ final class SpotPhotoService {
         } else if let street = await lookAroundPhoto(at: spot.coordinate, size: size) {
             image = street
         } else {
+            // Location-specific by nature, so inherently unique per spot.
             image = await satellitePhoto(at: spot.coordinate, size: size)
         }
 
@@ -39,7 +52,8 @@ final class SpotPhotoService {
 
     /// Finds Wikipedia articles geotagged near the spot and returns the lead
     /// photo of the one whose title matches the spot's name, falling back to
-    /// the closest article that has a photo at all.
+    /// the closest article that has a photo at all. Skips photos another
+    /// spot in this batch already claimed.
     private func wikipediaPhoto(for spot: ScenicSpot) async -> UIImage? {
         var components = URLComponents(string: "https://en.wikipedia.org/w/api.php")
         components?.queryItems = [
@@ -61,14 +75,21 @@ final class SpotPhotoService {
             guard let pages = response.query?.pages, !pages.isEmpty else { return nil }
 
             let spotName = spot.name.lowercased()
-            let withPhotos = pages.values.filter { $0.thumbnail != nil }
-            let match = withPhotos.first { page in
+            let available = pages.values
+                .filter { page in
+                    guard let source = page.thumbnail?.source else { return false }
+                    return !claimedSources.contains(source)
+                }
+            let match = available.first { page in
                 let title = page.title.lowercased()
                 return title.contains(spotName) || spotName.contains(title)
-            } ?? withPhotos.min { ($0.index ?? .max) < ($1.index ?? .max) }
+            } ?? available.min { ($0.index ?? .max) < ($1.index ?? .max) }
 
             guard let source = match?.thumbnail?.source,
                   let imageURL = URL(string: source) else { return nil }
+            // Claim before the download await, so an interleaved request for
+            // a neighboring spot can't pick the same photo.
+            claimedSources.insert(source)
             let (imageData, _) = try await URLSession.shared.data(from: imageURL)
             return UIImage(data: imageData)
         } catch {

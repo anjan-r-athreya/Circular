@@ -45,6 +45,9 @@ final class ScenicSpotService {
 
     func findSpots(near start: CLLocationCoordinate2D,
                    targetMiles: Double) async -> [ScenicSpot] {
+        // New suggestion batch: release the photo claims of the old one.
+        await SpotPhotoService.shared.beginBatch()
+
         let targetMeters = targetMiles * 1609.34
         let maxDistance = min(0.35 * targetMeters, 12_000)
 

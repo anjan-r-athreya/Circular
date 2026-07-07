@@ -55,6 +55,7 @@ struct RouteDetailView: View {
                 HStack(spacing: 12) {
                     // Load in Map Button
                     Button(action: {
+                        Haptics.selection()
                         NotificationCenter.default.post(name: Notification.Name("LoadFavoriteRoute"), object: route)
                         presentationMode.wrappedValue.dismiss()
                     }) {
@@ -72,6 +73,7 @@ struct RouteDetailView: View {
 
                     // Start Run Button
                     Button(action: {
+                        Haptics.success()
                         showingNavigation = true
                     }) {
                         HStack {

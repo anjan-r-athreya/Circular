@@ -15,18 +15,13 @@ struct MapboxMapView: View {
     @State private var showingStylePicker = false
     @State private var showingLoopGenerator = false
     @State private var targetMiles: Double = MapboxMapInterface.Controls.defaultMiles
-    @State private var isSearchExpanded = false
     @State private var showingRunNavigation = false
     @State private var shareItem: ShareItem?
     @State private var conditionsNudge: RunConditionsNudge?
     @State private var nudgeDismissed = false
+    @State private var cardCollapsed = false
     @AppStorage("targetPaceMinPerMile") private var paceMinPerMile: Double = MapboxMapInterface.Controls.defaultPaceMinPerMile
     
-    // Compute the vertical offset for side controls based on route existence
-    private var sideControlsOffset: CGFloat {
-        !viewModel.routeCoordinates.isEmpty ? -100 : 0 // Adjust this value to fine-tune the animation
-    }
-
     // The current generated loop wrapped as a Route so the run navigation
     // flow can treat it exactly like a favorite.
     private var generatedRoute: Route {
@@ -61,6 +56,8 @@ struct MapboxMapView: View {
             }
             
             GeometryReader { geometry in
+                // Side controls live in the same stack as the route card, so
+                // the card can never slide underneath them.
                 VStack(spacing: 0) {
                     searchBar
                         .padding(.top, geometry.safeAreaInsets.top)
@@ -71,16 +68,18 @@ struct MapboxMapView: View {
                         conditionsBanner(nudge)
                     }
                     Spacer()
+
+                    HStack {
+                        Spacer()
+                        sideControls
+                    }
+                    .padding(.trailing)
+                    .padding(.bottom, MapboxMapInterface.Layout.spacing.medium)
+
                     bottomControls
                 }
-                
-                sideControls
-                    .offset(y: sideControlsOffset)
-                    .animation(.spring(
-                        response: 0.35,
-                        dampingFraction: 0.8,
-                        blendDuration: 0
-                    ), value: sideControlsOffset)
+                .animation(MapboxMapInterface.Animation.spring, value: cardCollapsed)
+                .animation(MapboxMapInterface.Animation.spring, value: viewModel.routeCoordinates.isEmpty)
             }
             
             if viewModel.showingSuggestions {
@@ -103,6 +102,15 @@ struct MapboxMapView: View {
         }
         .sheet(item: $shareItem) { item in
             ShareSheet(items: [item.url])
+        }
+        // The style button used to toggle a flag nothing was watching.
+        .confirmationDialog("Map Style", isPresented: $showingStylePicker, titleVisibility: .visible) {
+            ForEach(MapboxConfig.MapStyle.allCases, id: \.self) { style in
+                Button(style.rawValue + (style == selectedStyle ? " ✓" : "")) {
+                    Haptics.selection()
+                    selectedStyle = style
+                }
+            }
         }
         .onReceive(viewModel.$customStartCoordinate) { coordinate in
             // Dropping a pin is a statement of intent — go straight to
@@ -147,25 +155,31 @@ struct MapboxMapView: View {
         }
     }
     
+    // The pill at the top is the main entry point to generation — it opens
+    // the distance picker directly (it used to be a search bar that led
+    // nowhere).
     private var searchBar: some View {
         Button(action: {
-            withAnimation(MapboxMapInterface.Animation.spring) {
-                isSearchExpanded.toggle()
-            }
+            Haptics.selection()
+            showingLoopGenerator = true
         }) {
             HStack {
-                Image(systemName: MapboxMapInterface.Controls.Icons.search)
+                Image(systemName: "figure.run")
+                    .foregroundColor(MapboxMapInterface.Colors.primary)
+
+                Text(MapboxMapInterface.Text.searchPlaceholder)
+                    .foregroundColor(MapboxMapInterface.Colors.text)
+                    .font(MapboxMapInterface.Typography.subheadline.weight(.medium))
+
+                Spacer()
+
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
                     .foregroundColor(MapboxMapInterface.Colors.secondaryText)
-                
-                if isSearchExpanded {
-                    Text(MapboxMapInterface.Text.searchPlaceholder)
-                        .foregroundColor(MapboxMapInterface.Colors.secondaryText)
-                    Spacer()
-                }
             }
             .padding()
             .background(MapboxMapInterface.Colors.controlBackground)
-            .cornerRadius(isSearchExpanded ? MapboxMapInterface.Layout.cornerRadius.small : MapboxMapInterface.Layout.cornerRadius.circular)
+            .cornerRadius(MapboxMapInterface.Layout.cornerRadius.circular)
             .shadow(
                 color: MapboxMapInterface.Shadows.subtle.color,
                 radius: MapboxMapInterface.Shadows.subtle.radius,
@@ -173,7 +187,6 @@ struct MapboxMapView: View {
                 y: MapboxMapInterface.Shadows.subtle.y
             )
         }
-        .frame(maxWidth: isSearchExpanded ? .infinity : MapboxMapInterface.Layout.size.searchBarCollapsed)
         .padding()
     }
     
@@ -240,55 +253,32 @@ struct MapboxMapView: View {
     }
 
     private var sideControls: some View {
-        VStack {
-            Spacer()
-            HStack {
-                Spacer()
-                VStack(spacing: MapboxMapInterface.Layout.spacing.medium) {
-                    mapControlButton(
-                        icon: MapboxMapInterface.Controls.Icons.location,
-                        isActive: viewModel.isTrackingLocation
-                    ) {
-                        viewModel.centerOnUser()
-                    }
-                    
-                    mapControlButton(
-                        icon: MapboxMapInterface.Controls.Icons.compass
-                    ) {
-                        viewModel.resetBearing()
-                    }
-                    
-                    mapControlButton(
-                        icon: viewModel.is3DEnabled ? MapboxMapInterface.Controls.Icons.view3D : MapboxMapInterface.Controls.Icons.view2D
-                    ) {
-                        viewModel.toggle3D()
-                    }
-                    
-                    mapControlButton(
-                        icon: MapboxMapInterface.Controls.Icons.loop,
-                        isActive: !viewModel.routeCoordinates.isEmpty
-                    ) {
-                        showingLoopGenerator = true
-                    }
-                }
-                .padding(.trailing)
-                .background(
-                    Group {
-                        if !viewModel.routeCoordinates.isEmpty {
-                            LinearGradient(
-                                gradient: Gradient(colors: [
-                                    MapboxMapInterface.Colors.background.opacity(0),
-                                    MapboxMapInterface.Colors.background.opacity(0.2)
-                                ]),
-                                startPoint: .bottom,
-                                endPoint: .top
-                            )
-                        }
-                    }
-                    .allowsHitTesting(false)
-                )
+        VStack(spacing: MapboxMapInterface.Layout.spacing.medium) {
+            mapControlButton(
+                icon: MapboxMapInterface.Controls.Icons.location,
+                isActive: viewModel.isTrackingLocation
+            ) {
+                viewModel.centerOnUser()
             }
-            .padding(.bottom, MapboxMapInterface.Layout.padding.bottomOffset)
+
+            mapControlButton(
+                icon: MapboxMapInterface.Controls.Icons.compass
+            ) {
+                viewModel.resetBearing()
+            }
+
+            mapControlButton(
+                icon: viewModel.is3DEnabled ? MapboxMapInterface.Controls.Icons.view3D : MapboxMapInterface.Controls.Icons.view2D
+            ) {
+                viewModel.toggle3D()
+            }
+
+            mapControlButton(
+                icon: MapboxMapInterface.Controls.Icons.loop,
+                isActive: !viewModel.routeCoordinates.isEmpty
+            ) {
+                showingLoopGenerator = true
+            }
         }
     }
     
@@ -300,7 +290,8 @@ struct MapboxMapView: View {
             
             HStack {
                 Button(action: {
-                    showingStylePicker.toggle()
+                    Haptics.selection()
+                    showingStylePicker = true
                 }) {
                     Image(systemName: MapboxMapInterface.Controls.Icons.map)
                         .foregroundColor(MapboxMapInterface.Colors.text)
@@ -329,18 +320,40 @@ struct MapboxMapView: View {
     
     private var routeInfoCard: some View {
         VStack(spacing: MapboxMapInterface.Layout.spacing.medium) {
-            routeInfoHeader
+            // Grab handle: swipe down to collapse, up to expand.
+            Capsule()
+                .fill(Color(white: 0.35))
+                .frame(width: 36, height: 4)
 
-            // Elevation strip slides in once its background fetch lands.
-            if !viewModel.routeElevations.isEmpty {
-                ElevationProfileView(
-                    elevations: viewModel.routeElevations,
-                    miles: viewModel.routeDistance
-                )
-                .transition(.opacity.combined(with: .move(edge: .bottom)))
+            if cardCollapsed {
+                collapsedRouteRow
+            } else {
+                routeInfoHeader
+
+                // Elevation strip slides in once its background fetch lands.
+                if !viewModel.routeElevations.isEmpty {
+                    ElevationProfileView(
+                        elevations: viewModel.routeElevations,
+                        miles: viewModel.routeDistance
+                    )
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+                }
             }
         }
         .animation(MapboxMapInterface.Animation.spring, value: viewModel.routeElevations.isEmpty)
+        .contentShape(Rectangle())
+        .gesture(
+            DragGesture(minimumDistance: 15)
+                .onEnded { value in
+                    if value.translation.height > 20, !cardCollapsed {
+                        withAnimation(MapboxMapInterface.Animation.spring) { cardCollapsed = true }
+                        Haptics.selection()
+                    } else if value.translation.height < -20, cardCollapsed {
+                        withAnimation(MapboxMapInterface.Animation.spring) { cardCollapsed = false }
+                        Haptics.selection()
+                    }
+                }
+        )
         .padding(MapboxMapInterface.Layout.padding.card)
         .background(
             MapboxMapInterface.Colors.controlBackground
@@ -359,27 +372,44 @@ struct MapboxMapView: View {
         .padding()
     }
 
-    private var routeInfoHeader: some View {
+    /// Slim one-liner when the card is collapsed out of the way.
+    private var collapsedRouteRow: some View {
         HStack {
-            VStack(alignment: .leading, spacing: MapboxMapInterface.Layout.spacing.small) {
-                Text(MapboxMapInterface.Text.generatedRoute)
-                    .font(MapboxMapInterface.Typography.headline)
-                    .foregroundColor(MapboxMapInterface.Colors.text)
-
-                Text(distanceLine)
-                    .font(MapboxMapInterface.Typography.subheadline)
-                    .foregroundColor(MapboxMapInterface.Colors.secondaryText)
-
-                Text("~\(estimatedTimeString(miles: viewModel.routeDistance)) at \(paceString(paceMinPerMile)) /mi")
-                    .font(MapboxMapInterface.Typography.subheadline)
-                    .foregroundColor(MapboxMapInterface.Colors.secondaryText)
-            }
-
+            Text(MapboxMapInterface.Text.generatedRoute)
+                .font(MapboxMapInterface.Typography.subheadline.weight(.semibold))
+                .foregroundColor(MapboxMapInterface.Colors.text)
             Spacer()
+            Text(String(format: "%.2f mi", viewModel.routeDistance))
+                .font(MapboxMapInterface.Typography.subheadline)
+                .foregroundColor(MapboxMapInterface.Colors.secondaryText)
+            Image(systemName: "chevron.up")
+                .font(.caption.weight(.semibold))
+                .foregroundColor(MapboxMapInterface.Colors.secondaryText)
+        }
+    }
+
+    // Text on top, actions in their own row underneath — the Start label
+    // never gets squeezed into a vertical letter stack again.
+    private var routeInfoHeader: some View {
+        VStack(alignment: .leading, spacing: MapboxMapInterface.Layout.spacing.small) {
+            Text(MapboxMapInterface.Text.generatedRoute)
+                .font(MapboxMapInterface.Typography.headline)
+                .foregroundColor(MapboxMapInterface.Colors.text)
+
+            Text(distanceLine)
+                .font(MapboxMapInterface.Typography.subheadline)
+                .foregroundColor(MapboxMapInterface.Colors.secondaryText)
+                .lineLimit(1)
+
+            Text("~\(estimatedTimeString(miles: viewModel.routeDistance)) at \(paceString(paceMinPerMile)) /mi")
+                .font(MapboxMapInterface.Typography.subheadline)
+                .foregroundColor(MapboxMapInterface.Colors.secondaryText)
+                .lineLimit(1)
 
             HStack(spacing: MapboxMapInterface.Layout.spacing.medium) {
                 // Share the loop as GPX
                 Button(action: {
+                    Haptics.selection()
                     if let url = RouteSharing.gpxFileURL(
                         coordinates: viewModel.routeCoordinates,
                         name: MapboxMapInterface.Text.generatedRoute,
@@ -403,6 +433,7 @@ struct MapboxMapView: View {
                 // Hidden for loaded favorites — there's no target to redo.
                 if viewModel.lastTargetMiles != nil {
                     Button(action: {
+                        Haptics.selection()
                         viewModel.regenerateLoop()
                     }) {
                         Image(systemName: MapboxMapInterface.Controls.Icons.shuffle)
@@ -443,16 +474,21 @@ struct MapboxMapView: View {
                             y: 0
                         )
                 }
-                
+
+                Spacer()
+
                 // Start button: launches the same 3D run navigation favorites use
                 Button(action: {
+                    Haptics.success()
                     showingRunNavigation = true
                 }) {
                     Text(MapboxMapInterface.Text.startButton)
                         .font(MapboxMapInterface.Typography.buttonText)
                         .foregroundColor(.white)
+                        .lineLimit(1)
+                        .fixedSize()
                         .padding(.horizontal, MapboxMapInterface.Layout.spacing.large)
-                        .padding(.vertical, MapboxMapInterface.Layout.spacing.small)
+                        .padding(.vertical, MapboxMapInterface.Layout.spacing.small + 4)
                         .background(MapboxMapInterface.Colors.primary)
                         .cornerRadius(MapboxMapInterface.Layout.cornerRadius.large)
                         .shadow(
@@ -463,7 +499,9 @@ struct MapboxMapView: View {
                         )
                 }
             }
+            .padding(.top, MapboxMapInterface.Layout.spacing.small)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func loadingOverlay(_ message: String) -> some View {
@@ -525,6 +563,7 @@ struct MapboxMapView: View {
                     .foregroundColor(MapboxMapInterface.Colors.secondaryText)
 
                 Button(action: {
+                    Haptics.selection()
                     showingLoopGenerator = false
                     viewModel.beginGenerationFlow(targetMiles: targetMiles)
                 }) {
@@ -605,6 +644,7 @@ struct MapboxMapView: View {
 
                 HStack(spacing: MapboxMapInterface.Layout.spacing.medium) {
                     Button(action: {
+                        Haptics.selection()
                         viewModel.skipSuggestions()
                     }) {
                         Text(MapboxMapInterface.Text.skipSuggestionsButton)
@@ -617,6 +657,7 @@ struct MapboxMapView: View {
                     }
 
                     Button(action: {
+                        Haptics.selection()
                         viewModel.confirmSuggestions()
                     }) {
                         Text(createRouteLabel)
@@ -682,7 +723,10 @@ struct MapboxMapView: View {
     }
 
     private func mapControlButton(icon: String, isActive: Bool = false, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
+        Button(action: {
+            Haptics.selection()
+            action()
+        }) {
             Image(systemName: icon)
                 .font(.system(size: MapboxMapInterface.Layout.size.iconSize))
                 .foregroundColor(isActive ? MapboxMapInterface.Colors.primary : MapboxMapInterface.Colors.text)
@@ -777,6 +821,10 @@ class MapboxViewController: UIViewController {
         
         // Set initial style to dark
         mapView.mapboxMap.loadStyleURI(MapboxMapInterface.MapStyle.darkStyle)
+
+        // A running app has no business at continent zoom — cap zoom-out at
+        // roughly metro scale.
+        try? mapView.mapboxMap.setCameraBounds(with: CameraBoundsOptions(minZoom: 8))
         
         // Configure location puck with the new styling
         mapView.location.options = MapboxMapInterface.Location.options

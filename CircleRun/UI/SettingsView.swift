@@ -126,6 +126,7 @@ struct SettingsView: View {
 
                 Section {
                     Button("Replay intro") {
+                        Haptics.selection()
                         withAnimation(.easeOut(duration: 0.5)) {
                             hasCompletedIntro = false
                         }
@@ -136,6 +137,10 @@ struct SettingsView: View {
                 }
             }
             .navigationTitle(MapboxMapInterface.Text.settingsTitle)
+            .onChange(of: preferSafePaths) { _ in Haptics.selection() }
+            .onChange(of: voiceCuesEnabled) { _ in Haptics.selection() }
+            .onChange(of: terrainPreference) { _ in Haptics.selection() }
+            .onChange(of: loopHeading) { _ in Haptics.selection() }
         }
     }
 

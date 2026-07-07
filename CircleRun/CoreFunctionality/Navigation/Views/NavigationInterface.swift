@@ -99,6 +99,7 @@ struct NavigationInterface: View {
 
                         // Pause/resume the clock without leaving the run
                         Button(action: {
+                            Haptics.selection()
                             navigationManager.togglePause()
                         }) {
                             Image(systemName: navigationManager.runningStats.isPaused
@@ -114,6 +115,7 @@ struct NavigationInterface: View {
 
                         // Toggle between the 3D chase camera and a flat 2D view
                         Button(action: {
+                            Haptics.selection()
                             navigationManager.toggle3DMode()
                         }) {
                             Image(systemName: navigationManager.is3DMode ? "view.3d" : "view.2d")
@@ -256,7 +258,10 @@ struct NavigationInterface: View {
                 }
 
                 HStack(spacing: 12) {
-                    Button(action: discardRun) {
+                    Button(action: {
+                        Haptics.selection()
+                        discardRun()
+                    }) {
                         Text("Discard")
                             .font(.headline)
                             .foregroundColor(.white)
@@ -266,7 +271,10 @@ struct NavigationInterface: View {
                             .cornerRadius(12)
                     }
 
-                    Button(action: saveRun) {
+                    Button(action: {
+                        Haptics.success()
+                        saveRun()
+                    }) {
                         Text("Save Run")
                             .font(.headline)
                             .foregroundColor(.white)

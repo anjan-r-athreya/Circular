@@ -41,6 +41,9 @@ struct MainTabView: View {
                 .tag(3)
         }
         .accentColor(.blue)
+        .onChange(of: selectedTab) { _ in
+            Haptics.selection()
+        }
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("LoadFavoriteRoute"))) { _ in
             // "Load in Map" needs the map on screen to mean anything.
             selectedTab = 0
