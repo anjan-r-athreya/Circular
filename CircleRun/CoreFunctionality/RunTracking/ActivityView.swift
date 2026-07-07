@@ -35,6 +35,29 @@ struct ActivityView: View {
                 }
             }
             .navigationTitle("Activity")
+            #if DEBUG
+            // Dev-only: fill or clear the tab with fake runs to preview it.
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu {
+                        Button {
+                            Haptics.success()
+                            store.seedSampleData()
+                        } label: {
+                            Label("Load sample data", systemImage: "wand.and.stars")
+                        }
+                        Button(role: .destructive) {
+                            Haptics.selection()
+                            store.clearHistory()
+                        } label: {
+                            Label("Clear history", systemImage: "trash")
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                    }
+                }
+            }
+            #endif
         }
     }
 

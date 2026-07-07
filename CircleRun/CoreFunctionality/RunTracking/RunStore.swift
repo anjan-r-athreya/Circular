@@ -96,3 +96,48 @@ final class RunStore: ObservableObject {
         }
     }
 }
+
+#if DEBUG
+// Dev-build helpers so the Activity tab can be exercised before any real
+// runs exist. Not compiled into release builds.
+extension RunStore {
+    /// Replaces history with a few weeks of plausible runs, including a
+    /// four-day streak ending today.
+    func seedSampleData() {
+        let calendar = Calendar.current
+        let now = Date()
+        let routeNames = ["Marina Loop", "River Path 5K", "Generated Route",
+                          "Hilltop Circuit", "Park Perimeter"]
+        // (days ago, miles, pace min/mi)
+        let plan: [(Int, Double, Double)] = [
+            (0, 3.1, 9.4), (1, 5.0, 9.9), (2, 2.6, 8.9), (3, 4.2, 10.3),
+            (5, 6.2, 10.1), (7, 3.5, 9.2), (8, 3.1, 9.6), (10, 8.0, 10.8),
+            (12, 4.0, 9.8), (14, 5.5, 10.2), (16, 3.0, 9.0), (19, 4.4, 10.0),
+        ]
+
+        var sample: [RunRecord] = []
+        for (i, entry) in plan.enumerated() {
+            guard let day = calendar.date(byAdding: .day, value: -entry.0, to: now) else { continue }
+            let date = calendar.date(bySettingHour: i % 2 == 0 ? 7 : 18,
+                                     minute: (i * 13) % 60,
+                                     second: 0, of: day) ?? day
+            sample.append(RunRecord(
+                id: UUID(),
+                date: min(date, now),
+                routeName: routeNames[i % routeNames.count],
+                routeID: nil,
+                miles: entry.1,
+                seconds: entry.1 * entry.2 * 60
+            ))
+        }
+
+        runs = sample.sorted { $0.date > $1.date }
+        save()
+    }
+
+    func clearHistory() {
+        runs = []
+        save()
+    }
+}
+#endif

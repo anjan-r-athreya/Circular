@@ -138,7 +138,7 @@ enum MapboxMapInterface {
 
     // MARK: - Text
     enum Text {
-        static let searchPlaceholder = "Generate a loop run"
+        static let searchPlaceholder = "Search a start location…"
         static let generatedRoute = "Generated Route"
         static let generatingRoute = "Generating Route..."
         static let startButton = "Start"

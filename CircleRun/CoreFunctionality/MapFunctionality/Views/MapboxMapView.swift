@@ -8,6 +8,7 @@
 import SwiftUI
 import MapboxMaps
 import CoreLocation
+import MapKit
 
 struct MapboxMapView: View {
     @StateObject private var viewModel = MapboxViewModel()
@@ -16,6 +17,10 @@ struct MapboxMapView: View {
     @State private var showingLoopGenerator = false
     @State private var targetMiles: Double = MapboxMapInterface.Controls.defaultMiles
     @State private var showingRunNavigation = false
+    @State private var isSearchExpanded = false
+    @State private var searchText = ""
+    @State private var isSearchingLocation = false
+    @FocusState private var searchFieldFocused: Bool
     @State private var shareItem: ShareItem?
     @State private var conditionsNudge: RunConditionsNudge?
     @State private var nudgeDismissed = false
@@ -155,39 +160,104 @@ struct MapboxMapView: View {
         }
     }
     
-    // The pill at the top is the main entry point to generation — it opens
-    // the distance picker directly (it used to be a search bar that led
-    // nowhere).
+    // Collapsed: a search icon. Expanded: a field that finds an address or
+    // place and drops the start pin there, so loops can be planned from
+    // anywhere by name.
     private var searchBar: some View {
-        Button(action: {
-            Haptics.selection()
-            showingLoopGenerator = true
-        }) {
-            HStack {
-                Image(systemName: "figure.run")
+        HStack(spacing: 10) {
+            if isSearchExpanded {
+                Image(systemName: MapboxMapInterface.Controls.Icons.search)
                     .foregroundColor(MapboxMapInterface.Colors.primary)
 
-                Text(MapboxMapInterface.Text.searchPlaceholder)
+                TextField(MapboxMapInterface.Text.searchPlaceholder, text: $searchText)
                     .foregroundColor(MapboxMapInterface.Colors.text)
-                    .font(MapboxMapInterface.Typography.subheadline.weight(.medium))
+                    .tint(MapboxMapInterface.Colors.primary)
+                    .autocorrectionDisabled()
+                    .focused($searchFieldFocused)
+                    .submitLabel(.search)
+                    .onSubmit { searchForStartLocation() }
 
-                Spacer()
+                if isSearchingLocation {
+                    ProgressView()
+                        .tint(MapboxMapInterface.Colors.primary)
+                        .controlSize(.small)
+                }
 
-                Image(systemName: "chevron.right")
-                    .font(.caption.weight(.semibold))
-                    .foregroundColor(MapboxMapInterface.Colors.secondaryText)
+                Button(action: collapseSearch) {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundColor(MapboxMapInterface.Colors.secondaryText)
+                }
+            } else {
+                Button(action: expandSearch) {
+                    Image(systemName: MapboxMapInterface.Controls.Icons.search)
+                        .foregroundColor(MapboxMapInterface.Colors.secondaryText)
+                        .frame(width: 22, height: 22)
+                }
             }
-            .padding()
-            .background(MapboxMapInterface.Colors.controlBackground)
-            .cornerRadius(MapboxMapInterface.Layout.cornerRadius.circular)
-            .shadow(
-                color: MapboxMapInterface.Shadows.subtle.color,
-                radius: MapboxMapInterface.Shadows.subtle.radius,
-                x: MapboxMapInterface.Shadows.subtle.x,
-                y: MapboxMapInterface.Shadows.subtle.y
-            )
         }
         .padding()
+        .background(MapboxMapInterface.Colors.controlBackground)
+        .cornerRadius(isSearchExpanded
+                      ? MapboxMapInterface.Layout.cornerRadius.small
+                      : MapboxMapInterface.Layout.cornerRadius.circular)
+        .shadow(
+            color: MapboxMapInterface.Shadows.subtle.color,
+            radius: MapboxMapInterface.Shadows.subtle.radius,
+            x: MapboxMapInterface.Shadows.subtle.x,
+            y: MapboxMapInterface.Shadows.subtle.y
+        )
+        .frame(maxWidth: isSearchExpanded ? .infinity : MapboxMapInterface.Layout.size.searchBarCollapsed,
+               alignment: .leading)
+        .padding()
+    }
+
+    private func expandSearch() {
+        Haptics.selection()
+        withAnimation(MapboxMapInterface.Animation.spring) {
+            isSearchExpanded = true
+        }
+        // Focus after the field exists in the hierarchy.
+        DispatchQueue.main.async {
+            searchFieldFocused = true
+        }
+    }
+
+    private func collapseSearch() {
+        searchFieldFocused = false
+        searchText = ""
+        withAnimation(MapboxMapInterface.Animation.spring) {
+            isSearchExpanded = false
+        }
+    }
+
+    /// Geocodes the query near the current map view and drops the start pin
+    /// on the best match.
+    private func searchForStartLocation() {
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return }
+        isSearchingLocation = true
+
+        let request = MKLocalSearch.Request()
+        request.naturalLanguageQuery = query
+        if let center = viewModel.mapViewController?.mapView.cameraState.center {
+            request.region = MKCoordinateRegion(center: center,
+                                                latitudinalMeters: 60_000,
+                                                longitudinalMeters: 60_000)
+        }
+
+        MKLocalSearch(request: request).start { response, _ in
+            DispatchQueue.main.async {
+                isSearchingLocation = false
+                guard let coordinate = response?.mapItems.first?.placemark.coordinate else {
+                    Haptics.error()
+                    viewModel.errorMessage = "Couldn't find \"\(query)\" — try a fuller address or a nearby landmark."
+                    return
+                }
+                Haptics.success()
+                collapseSearch()
+                viewModel.setCustomStart(coordinate)
+            }
+        }
     }
     
     /// Shown while a custom start pin is set, with the way out.

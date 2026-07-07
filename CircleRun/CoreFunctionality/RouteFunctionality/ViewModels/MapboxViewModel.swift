@@ -272,6 +272,11 @@ class MapboxViewModel: ObservableObject {
         customStartCoordinate = coordinate
         displayStartPin(at: coordinate)
         Haptics.selection()
+        // Searched locations can be far away — bring the map along.
+        mapViewController?.mapView.camera.fly(
+            to: CameraOptions(center: coordinate, zoom: 14),
+            duration: 0.8
+        )
     }
 
     func clearCustomStart() {
