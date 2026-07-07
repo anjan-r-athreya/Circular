@@ -17,6 +17,7 @@ struct MapboxMapView: View {
     @State private var targetMiles: Double = MapboxMapInterface.Controls.defaultMiles
     @State private var isSearchExpanded = false
     @State private var showingRunNavigation = false
+    @State private var shareItem: ShareItem?
     @AppStorage("targetPaceMinPerMile") private var paceMinPerMile: Double = MapboxMapInterface.Controls.defaultPaceMinPerMile
     
     // Compute the vertical offset for side controls based on route existence
@@ -91,6 +92,9 @@ struct MapboxMapView: View {
         }
         .fullScreenCover(isPresented: $showingRunNavigation) {
             NavigationInterface(route: generatedRoute)
+        }
+        .sheet(item: $shareItem) { item in
+            ShareSheet(items: [item.url])
         }
         .alert(MapboxMapInterface.Text.generationFailedTitle,
                isPresented: .constant(viewModel.errorMessage != nil)) {
@@ -281,6 +285,27 @@ struct MapboxMapView: View {
             Spacer()
 
             HStack(spacing: MapboxMapInterface.Layout.spacing.medium) {
+                // Share the loop as GPX
+                Button(action: {
+                    if let url = RouteSharing.gpxFileURL(
+                        coordinates: viewModel.routeCoordinates,
+                        name: MapboxMapInterface.Text.generatedRoute,
+                        distanceMiles: viewModel.routeDistance
+                    ) {
+                        shareItem = ShareItem(url: url)
+                    }
+                }) {
+                    Image(systemName: MapboxMapInterface.Controls.Icons.share)
+                        .font(.system(size: MapboxMapInterface.Layout.size.iconSize))
+                        .foregroundColor(MapboxMapInterface.Colors.text)
+                        .frame(
+                            width: MapboxMapInterface.Layout.size.controlButton,
+                            height: MapboxMapInterface.Layout.size.controlButton
+                        )
+                        .background(MapboxMapInterface.Colors.controlBackground)
+                        .clipShape(Circle())
+                }
+
                 // Shuffle button: new loop, same distance, different direction.
                 // Hidden for loaded favorites — there's no target to redo.
                 if viewModel.lastTargetMiles != nil {

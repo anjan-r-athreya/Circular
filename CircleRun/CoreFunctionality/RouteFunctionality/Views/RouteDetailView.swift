@@ -21,6 +21,7 @@ struct RouteDetailView: View {
     @State private var difficulty = "…"
     @State private var elevationGainText = "…"
     @State private var statsLoaded = false
+    @State private var shareItem: ShareItem?
 
     var body: some View {
         ScrollView {
@@ -129,6 +130,22 @@ struct RouteDetailView: View {
             .padding()
         }
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button(action: {
+                    if let url = RouteSharing.gpxFileURL(coordinates: route.path,
+                                                         name: route.name,
+                                                         distanceMiles: route.distance) {
+                        shareItem = ShareItem(url: url)
+                    }
+                }) {
+                    Image(systemName: "square.and.arrow.up")
+                }
+            }
+        }
+        .sheet(item: $shareItem) { item in
+            ShareSheet(items: [item.url])
+        }
         .fullScreenCover(isPresented: $showingNavigation) {
             NavigationInterface(route: route)
         }

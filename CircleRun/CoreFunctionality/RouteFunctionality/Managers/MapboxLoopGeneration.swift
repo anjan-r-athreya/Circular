@@ -748,33 +748,6 @@ final class MapboxLoopGenerator {
 
     // MARK: - GPX export
 
-    private func generateGPXContent(coordinates: [CLLocationCoordinate2D], routeName: String) -> String {
-        var gpx = """
-        <?xml version="1.0" encoding="UTF-8"?>
-        <gpx version="1.1" creator="CircleRun Dev"
-        xmlns="http://www.topografix.com/GPX/1/1"
-        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-        xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd">
-        <trk>
-            <name>\(routeName)</name>
-            <trkseg>
-        """
-
-        for coord in coordinates {
-            gpx += """
-
-                <trkpt lat="\(coord.latitude)" lon="\(coord.longitude)"></trkpt>
-            """
-        }
-
-        gpx += """
-            </trkseg>
-        </trk>
-        </gpx>
-        """
-        return gpx
-    }
-
     private func getDocumentsDirectory() -> URL {
         FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
     }
@@ -784,7 +757,7 @@ final class MapboxLoopGenerator {
         let timestamp = ISO8601DateFormatter().string(from: Date())
         let docsDir = getDocumentsDirectory()
 
-        let gpxContent = generateGPXContent(coordinates: coordinates, routeName: routeName)
+        let gpxContent = RouteSharing.gpxContent(coordinates: coordinates, routeName: routeName)
         let gpxPath = docsDir.appendingPathComponent("\(routeName)_\(timestamp).gpx")
 
         do {

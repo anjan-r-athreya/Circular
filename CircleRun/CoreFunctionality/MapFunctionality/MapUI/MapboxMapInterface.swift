@@ -132,6 +132,7 @@ enum MapboxMapInterface {
             static let loop = "circle.dashed"
             static let map = "map"
             static let shuffle = "arrow.triangle.2.circlepath"
+            static let share = "square.and.arrow.up"
         }
     }
 
