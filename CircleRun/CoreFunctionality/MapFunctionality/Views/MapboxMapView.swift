@@ -64,6 +64,9 @@ struct MapboxMapView: View {
                 VStack(spacing: 0) {
                     searchBar
                         .padding(.top, geometry.safeAreaInsets.top)
+                    if viewModel.customStartCoordinate != nil {
+                        startPinChip
+                    }
                     if let nudge = conditionsNudge, !nudgeDismissed {
                         conditionsBanner(nudge)
                     }
@@ -100,6 +103,13 @@ struct MapboxMapView: View {
         }
         .sheet(item: $shareItem) { item in
             ShareSheet(items: [item.url])
+        }
+        .onReceive(viewModel.$customStartCoordinate) { coordinate in
+            // Dropping a pin is a statement of intent — go straight to
+            // picking a distance.
+            if coordinate != nil {
+                showingLoopGenerator = true
+            }
         }
         .task {
             // Location takes a moment after launch; poll briefly, then fetch
@@ -167,6 +177,36 @@ struct MapboxMapView: View {
         .padding()
     }
     
+    /// Shown while a custom start pin is set, with the way out.
+    private var startPinChip: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "mappin.circle.fill")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(.green)
+
+            Text("Loops start at the dropped pin")
+                .font(.caption.weight(.medium))
+                .foregroundColor(MapboxMapInterface.Colors.text)
+
+            Button(action: {
+                withAnimation(MapboxMapInterface.Animation.spring) {
+                    viewModel.clearCustomStart()
+                }
+            }) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(MapboxMapInterface.Colors.secondaryText)
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .background(
+            Capsule().fill(MapboxMapInterface.Colors.controlBackground)
+                .overlay(Capsule().stroke(Color.green.opacity(0.4), lineWidth: 1))
+        )
+        .transition(.move(edge: .top).combined(with: .opacity))
+    }
+
     /// One-line weather/sunset read on whether now is a good time to run.
     private func conditionsBanner(_ nudge: RunConditionsNudge) -> some View {
         HStack(spacing: 8) {
@@ -776,13 +816,26 @@ class MapboxViewController: UIViewController {
         let doubleTap = UITapGestureRecognizer(target: self, action: #selector(handleDoubleTap(_:)))
         doubleTap.numberOfTapsRequired = 2
         mapView.addGestureRecognizer(doubleTap)
+
+        // Long-press drops a custom start pin: plan loops from anywhere,
+        // not just where you're standing.
+        let longPress = UILongPressGestureRecognizer(target: self, action: #selector(handleLongPress(_:)))
+        longPress.minimumPressDuration = 0.5
+        mapView.addGestureRecognizer(longPress)
     }
-    
+
     @objc private func handleDoubleTap(_ gesture: UITapGestureRecognizer) {
         let point = gesture.location(in: mapView)
         let coordinate = mapView.mapboxMap.coordinate(for: point)
         let camera = CameraOptions(center: coordinate, zoom: mapView.cameraState.zoom + 1)
         mapView.camera.fly(to: camera, duration: 0.5)
+    }
+
+    @objc private func handleLongPress(_ gesture: UILongPressGestureRecognizer) {
+        guard gesture.state == .began else { return }
+        let point = gesture.location(in: mapView)
+        let coordinate = mapView.mapboxMap.coordinate(for: point)
+        delegate?.didLongPress(at: coordinate)
     }
     
     func updateStyle(to style: MapboxConfig.MapStyle) {
@@ -828,6 +881,7 @@ protocol MapboxViewControllerDelegate: AnyObject {
     var is3DEnabled: Bool { get set }
     var isTrackingLocation: Bool { get set }
     func didUpdateLocation(_ location: CLLocation)
+    func didLongPress(at coordinate: CLLocationCoordinate2D)
 }
 
 #Preview {

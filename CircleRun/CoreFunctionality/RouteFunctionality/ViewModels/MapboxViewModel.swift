@@ -29,10 +29,15 @@ class MapboxViewModel: ObservableObject {
     @Published var isLoadingSpots = false
     @Published var showingSuggestions = false
 
+    /// Long-press start pin; loops generate from here instead of the runner's
+    /// location until it's cleared.
+    @Published var customStartCoordinate: CLLocationCoordinate2D?
+
     weak var mapViewController: MapboxViewController?
     private var currentLocation: CLLocation?
     private var routeAnnotation: PolylineAnnotation?
     private var spotAnnotationManager: PointAnnotationManager?
+    private var startPinManager: PointAnnotationManager?
     @Published private(set) var lastTargetMiles: Double?
     /// Bumped whenever the displayed route changes, so a slow elevation fetch
     /// for an old route can't land on a new one.
@@ -40,8 +45,13 @@ class MapboxViewModel: ObservableObject {
 
     // MARK: - Route Generation
 
+    /// Where loops start: the dropped pin when there is one, else the runner.
+    var generationStart: CLLocationCoordinate2D? {
+        customStartCoordinate ?? mapViewController?.mapView.location.latestLocation?.coordinate
+    }
+
     func generateLoop(targetMiles: Double) {
-        guard let location = mapViewController?.mapView.location.latestLocation?.coordinate else {
+        guard let location = generationStart else {
             errorMessage = "Current location not available"
             return
         }
@@ -108,7 +118,7 @@ class MapboxViewModel: ObservableObject {
     /// any are found, show them as suggestion cards before building the route.
     /// Falls straight through to generation when nothing interesting is nearby.
     func beginGenerationFlow(targetMiles: Double) {
-        guard let location = mapViewController?.mapView.location.latestLocation?.coordinate else {
+        guard let location = generationStart else {
             errorMessage = "Current location not available"
             return
         }
@@ -136,7 +146,7 @@ class MapboxViewModel: ObservableObject {
     /// generator uses) inflated for street winding. Lets the UI warn and
     /// auto-extend BEFORE generation instead of erroring after it.
     func minimumMilesForSelection() -> Double? {
-        guard let start = mapViewController?.mapView.location.latestLocation?.coordinate else {
+        guard let start = generationStart else {
             return nil
         }
         let coords = scenicSpots.filter { selectedSpotIDs.contains($0.id) }.map { $0.coordinate }
@@ -256,6 +266,54 @@ class MapboxViewModel: ObservableObject {
         )
     }
     
+    // MARK: - Custom start pin
+
+    func setCustomStart(_ coordinate: CLLocationCoordinate2D) {
+        customStartCoordinate = coordinate
+        displayStartPin(at: coordinate)
+        Haptics.selection()
+    }
+
+    func clearCustomStart() {
+        customStartCoordinate = nil
+        startPinManager?.annotations = []
+    }
+
+    private func displayStartPin(at coordinate: CLLocationCoordinate2D) {
+        guard let mapView = mapViewController?.mapView else { return }
+        let manager = startPinManager
+            ?? mapView.annotations.makePointAnnotationManager(id: "custom-start-pin")
+        startPinManager = manager
+
+        var annotation = PointAnnotation(coordinate: coordinate)
+        annotation.image = .init(image: Self.makeStartPinImage(), name: "custom-start-pin-image")
+        annotation.iconAnchor = .bottom
+        manager.annotations = [annotation]
+    }
+
+    /// Green start pin: ringed dot over a pointer whose tip is the start.
+    private static func makeStartPinImage() -> UIImage {
+        let diameter: CGFloat = 26
+        let pointerHeight: CGFloat = 9
+        let size = CGSize(width: diameter, height: diameter + pointerHeight)
+
+        return UIGraphicsImageRenderer(size: size).image { _ in
+            let pointer = UIBezierPath()
+            pointer.move(to: CGPoint(x: diameter / 2 - 5, y: diameter - 1))
+            pointer.addLine(to: CGPoint(x: diameter / 2 + 5, y: diameter - 1))
+            pointer.addLine(to: CGPoint(x: diameter / 2, y: diameter + pointerHeight))
+            pointer.close()
+            UIColor.white.setFill()
+            pointer.fill()
+
+            let circleRect = CGRect(x: 0, y: 0, width: diameter, height: diameter)
+            UIBezierPath(ovalIn: circleRect).fill()
+
+            UIColor.systemGreen.setFill()
+            UIBezierPath(ovalIn: circleRect.insetBy(dx: 3, dy: 3)).fill()
+        }
+    }
+
     // MARK: - Elevation
 
     /// Loads the elevation strip for the displayed route in the background;
@@ -462,5 +520,9 @@ extension MapboxViewModel: MapboxViewControllerDelegate {
         if isTrackingLocation {
             centerOnUser()
         }
+    }
+
+    func didLongPress(at coordinate: CLLocationCoordinate2D) {
+        setCustomStart(coordinate)
     }
 }
