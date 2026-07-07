@@ -210,6 +210,7 @@ struct NavigationInterface: View {
         if summary.completedRoute {
             RouteManager.shared.recordRun(routeID: route.id, time: summary.seconds)
         }
+        HealthKitService.shared.saveRun(miles: summary.miles, seconds: summary.seconds)
         navigationManager.stopNavigation()
         dismiss()
     }

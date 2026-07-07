@@ -4,9 +4,7 @@
 <dict>
 	<key>BGTaskSchedulerPermittedIdentifiers</key>
 	<array>
-		<string>com.circlerun.locationupdate
-com.circlerun.locationupdate
-com.circlerun.locationupdate</string>
+		<string>com.circlerun.locationupdate</string>
 	</array>
 	<key>CFBundleDocumentTypes</key>
 	<array>

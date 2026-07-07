@@ -16,6 +16,7 @@ struct SettingsView: View {
     @AppStorage("maxElevationGainFeet") private var maxElevationGainFeet: Double = 0
     @AppStorage("hasCompletedIntro") private var hasCompletedIntro = false
     @AppStorage("voiceCuesEnabled") private var voiceCuesEnabled = true
+    @AppStorage("healthKitSyncEnabled") private var healthKitSyncEnabled = false
 
     var body: some View {
         NavigationStack {
@@ -51,6 +52,25 @@ struct SettingsView: View {
                         }
                     }
                     .tint(MapboxMapInterface.Colors.primary)
+
+                    if HealthKitService.shared.isAvailable {
+                        Toggle(isOn: $healthKitSyncEnabled) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Sync runs to Apple Health")
+                                Text("Saved runs appear as workouts with distance")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                        .tint(MapboxMapInterface.Colors.primary)
+                        .onChange(of: healthKitSyncEnabled) { enabled in
+                            // Prompt right away so the first saved run doesn't
+                            // stall on an authorization dialog mid-sweat.
+                            if enabled {
+                                HealthKitService.shared.requestAuthorization()
+                            }
+                        }
+                    }
                 } header: {
                     Text("During Runs")
                 }
