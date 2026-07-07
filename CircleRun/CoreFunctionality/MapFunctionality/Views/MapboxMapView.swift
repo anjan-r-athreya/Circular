@@ -18,6 +18,8 @@ struct MapboxMapView: View {
     @State private var isSearchExpanded = false
     @State private var showingRunNavigation = false
     @State private var shareItem: ShareItem?
+    @State private var conditionsNudge: RunConditionsNudge?
+    @State private var nudgeDismissed = false
     @AppStorage("targetPaceMinPerMile") private var paceMinPerMile: Double = MapboxMapInterface.Controls.defaultPaceMinPerMile
     
     // Compute the vertical offset for side controls based on route existence
@@ -62,6 +64,9 @@ struct MapboxMapView: View {
                 VStack(spacing: 0) {
                     searchBar
                         .padding(.top, geometry.safeAreaInsets.top)
+                    if let nudge = conditionsNudge, !nudgeDismissed {
+                        conditionsBanner(nudge)
+                    }
                     Spacer()
                     bottomControls
                 }
@@ -95,6 +100,22 @@ struct MapboxMapView: View {
         }
         .sheet(item: $shareItem) { item in
             ShareSheet(items: [item.url])
+        }
+        .task {
+            // Location takes a moment after launch; poll briefly, then fetch
+            // conditions once. The service caches for half an hour.
+            for _ in 0..<10 {
+                if let coordinate = viewModel.mapViewController?.mapView.location.latestLocation?.coordinate {
+                    let nudge = await RunConditionsService.shared.nudge(at: coordinate)
+                    await MainActor.run {
+                        withAnimation(MapboxMapInterface.Animation.spring) {
+                            conditionsNudge = nudge
+                        }
+                    }
+                    return
+                }
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+            }
         }
         .alert(MapboxMapInterface.Text.generationFailedTitle,
                isPresented: .constant(viewModel.errorMessage != nil)) {
@@ -146,6 +167,38 @@ struct MapboxMapView: View {
         .padding()
     }
     
+    /// One-line weather/sunset read on whether now is a good time to run.
+    private func conditionsBanner(_ nudge: RunConditionsNudge) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: nudge.systemImage)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(MapboxMapInterface.Colors.primary)
+
+            Text(nudge.text)
+                .font(.caption.weight(.medium))
+                .foregroundColor(MapboxMapInterface.Colors.text)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+
+            Button(action: {
+                withAnimation(MapboxMapInterface.Animation.spring) {
+                    nudgeDismissed = true
+                }
+            }) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(MapboxMapInterface.Colors.secondaryText)
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .background(
+            Capsule().fill(MapboxMapInterface.Colors.controlBackground)
+                .overlay(Capsule().stroke(MapboxMapInterface.Colors.primary.opacity(0.3), lineWidth: 1))
+        )
+        .transition(.move(edge: .top).combined(with: .opacity))
+    }
+
     private var sideControls: some View {
         VStack {
             Spacer()
