@@ -8,9 +8,13 @@
 import SwiftUI
 import MapKit
 
+/// Marker subclass so the renderer can tell the shine overlay apart from
+/// the base route line.
+final class ShinePolyline: MKPolyline {}
+
 struct MapViewRepresentable: UIViewRepresentable {
     @ObservedObject var navigationManager: NavigationManager
-    
+
     func makeUIView(context: Context) -> MKMapView {
         let mapView = MKMapView()
         mapView.delegate = context.coordinator
@@ -23,10 +27,18 @@ struct MapViewRepresentable: UIViewRepresentable {
 
         if let overlay = navigationManager.routeOverlay {
             mapView.addOverlay(overlay)
+            mapView.addOverlay(Self.shineOverlay(matching: overlay))
             context.coordinator.lastOverlay = overlay
         }
 
         return mapView
+    }
+
+    /// A second polyline over the same points that carries the moving shine.
+    private static func shineOverlay(matching polyline: MKPolyline) -> ShinePolyline {
+        let points = polyline.points()
+        var coordinates = (0..<polyline.pointCount).map { points[$0].coordinate }
+        return ShinePolyline(coordinates: &coordinates, count: coordinates.count)
     }
 
     func updateUIView(_ mapView: MKMapView, context: Context) {
@@ -35,6 +47,7 @@ struct MapViewRepresentable: UIViewRepresentable {
            overlay !== context.coordinator.lastOverlay {
             mapView.removeOverlays(mapView.overlays)
             mapView.addOverlay(overlay)
+            mapView.addOverlay(Self.shineOverlay(matching: overlay))
             context.coordinator.lastOverlay = overlay
         }
 
@@ -60,8 +73,32 @@ struct MapViewRepresentable: UIViewRepresentable {
         var lastAppliedCamera: MKMapCamera?
         var lastOverlay: MKOverlay?
 
+        /// Renderer whose dash phase the display link slides each frame,
+        /// making pulses of light travel along the route.
+        private var shineRenderer: MKPolylineRenderer?
+        private var displayLink: CADisplayLink?
+
         init(_ parent: MapViewRepresentable) {
             self.parent = parent
+        }
+
+        deinit {
+            displayLink?.invalidate()
+        }
+
+        private func startShineIfNeeded() {
+            guard displayLink == nil else { return }
+            let link = CADisplayLink(target: self, selector: #selector(tickShine))
+            // The pulses read fine at 30fps and cost half the redraws.
+            link.preferredFrameRateRange = CAFrameRateRange(minimum: 20, maximum: 30, preferred: 30)
+            link.add(to: .main, forMode: .common)
+            displayLink = link
+        }
+
+        @objc private func tickShine() {
+            guard let renderer = shineRenderer else { return }
+            renderer.lineDashPhase -= 1.4
+            renderer.setNeedsDisplay()
         }
 
         func mapView(_ mapView: MKMapView, regionWillChangeAnimated animated: Bool) {
@@ -78,6 +115,17 @@ struct MapViewRepresentable: UIViewRepresentable {
         }
 
         func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
+            if let shine = overlay as? ShinePolyline {
+                // Sparse bright dashes gliding over the base line.
+                let renderer = MKPolylineRenderer(polyline: shine)
+                renderer.strokeColor = UIColor.white.withAlphaComponent(0.9)
+                renderer.lineWidth = 3
+                renderer.lineCap = .round
+                renderer.lineDashPattern = [10, 90]
+                shineRenderer = renderer
+                startShineIfNeeded()
+                return renderer
+            }
             if let polyline = overlay as? MKPolyline {
                 let renderer = MKPolylineRenderer(polyline: polyline)
                 renderer.strokeColor = .systemBlue

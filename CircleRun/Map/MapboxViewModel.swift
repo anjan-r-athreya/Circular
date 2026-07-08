@@ -46,6 +46,13 @@ class MapboxViewModel: ObservableObject {
     /// Bumped whenever the displayed route changes, so a slow elevation fetch
     /// for an old route can't land on a new one.
     private var routeGeneration = 0
+    /// Drives the shine sweeping along the displayed route.
+    private var shineTimer: Timer?
+    private var shineStartTime = Date()
+
+    deinit {
+        shineTimer?.invalidate()
+    }
 
     // MARK: - Route Generation
 
@@ -398,15 +405,17 @@ class MapboxViewModel: ObservableObject {
     
     private func displayRoute(coordinates: [CLLocationCoordinate2D]) {
         guard let mapView = mapViewController?.mapView else { return }
-        
+
         // Remove any existing route first (safe no-ops when absent). The old
         // guard here checked a property that was never assigned, so it never ran.
+        stopRouteShine()
+        try? mapView.mapboxMap.style.removeLayer(withId: "route-shine-layer")
         try? mapView.mapboxMap.style.removeLayer(withId: "route-layer")
         try? mapView.mapboxMap.style.removeSource(withId: "route-source")
-        
+
         // Create a linestring from the coordinates
         let lineString = LineString(coordinates)
-        
+
         // Create a feature for the route
         var feature = Feature(geometry: .lineString(lineString))
         feature.properties = [
@@ -414,12 +423,14 @@ class MapboxViewModel: ObservableObject {
             "stroke-width": .number(4),
             "stroke-opacity": .number(0.8)
         ]
-        
-        // Create and add the source
+
+        // Create and add the source. lineMetrics powers the line-progress
+        // gradient the shine animation rides on.
         var source = GeoJSONSource()
         source.data = .feature(feature)
+        source.lineMetrics = true
         try? mapView.mapboxMap.style.addSource(source, id: "route-source")
-        
+
         // Create and add the layer
         var layer = LineLayer(id: "route-layer")
         layer.source = "route-source"
@@ -427,8 +438,79 @@ class MapboxViewModel: ObservableObject {
         layer.lineWidth = .constant(4)
         layer.lineCap = .constant(.round)
         layer.lineJoin = .constant(.round)
-        
+
         try? mapView.mapboxMap.style.addLayer(layer)
+
+        // Shine layer on top: transparent except for a bright head that
+        // sweeps along the loop (driven by startRouteShine's timer).
+        var shine = LineLayer(id: "route-shine-layer")
+        shine.source = "route-source"
+        shine.lineWidth = .constant(4)
+        shine.lineCap = .constant(.round)
+        shine.lineJoin = .constant(.round)
+        shine.lineColor = .constant(.init(UIColor.clear))
+        try? mapView.mapboxMap.style.addLayer(shine)
+
+        startRouteShine()
+    }
+
+    // MARK: - Route shine
+
+    /// Sweeps a comet of light along the displayed route — the same motion
+    /// language as the intro and the loading overlay.
+    private func startRouteShine() {
+        shineStartTime = Date()
+        shineTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30.0,
+                                          repeats: true) { [weak self] _ in
+            self?.tickRouteShine()
+        }
+    }
+
+    private func stopRouteShine() {
+        shineTimer?.invalidate()
+        shineTimer = nil
+    }
+
+    private func tickRouteShine() {
+        guard let mapView = mapViewController?.mapView,
+              mapView.mapboxMap.style.layerExists(withId: "route-shine-layer") else { return }
+
+        // Head runs slightly past 1 so the tail fully exits before wrapping.
+        let period = 3.2
+        let phase = Date().timeIntervalSince(shineStartTime)
+            .truncatingRemainder(dividingBy: period) / period
+        let head = phase * 1.18
+
+        try? mapView.mapboxMap.style.setLayerProperty(
+            for: "route-shine-layer",
+            property: "line-gradient",
+            value: Self.shineGradient(head: head)
+        )
+    }
+
+    /// A line-progress gradient: transparent everywhere except a cyan tail
+    /// fading into a white head around `head`. Stops are clamped into [0, 1]
+    /// and strictly ascending, as the style spec requires.
+    private static func shineGradient(head: Double) -> [Any] {
+        let stops: [(Double, String)] = [
+            (0.0, "rgba(255,255,255,0)"),
+            (head - 0.16, "rgba(255,255,255,0)"),
+            (head - 0.03, "rgba(120,220,255,0.55)"),
+            (head, "rgba(255,255,255,0.95)"),
+            (head + 0.015, "rgba(255,255,255,0)"),
+            (1.0, "rgba(255,255,255,0)"),
+        ]
+
+        var expression: [Any] = ["interpolate", ["linear"], ["line-progress"]]
+        var lastPosition = -1.0
+        for (position, color) in stops {
+            let clamped = min(max(position, 0), 1)
+            guard clamped > lastPosition + 0.0001 else { continue }
+            lastPosition = clamped
+            expression.append(clamped)
+            expression.append(color)
+        }
+        return expression
     }
 
     /// Pins each scenic spot on the route with its photo — a circular
@@ -502,7 +584,9 @@ class MapboxViewModel: ObservableObject {
 
     private func clearRouteLayers() {
         guard let mapView = mapViewController?.mapView else { return }
+        stopRouteShine()
         spotAnnotationManager?.annotations = []
+        try? mapView.mapboxMap.style.removeLayer(withId: "route-shine-layer")
         try? mapView.mapboxMap.style.removeLayer(withId: "route-layer")
         try? mapView.mapboxMap.style.removeSource(withId: "route-source")
     }
