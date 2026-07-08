@@ -64,6 +64,11 @@ class RouteManager {
         loadFavorites()?.first { $0.id == id }
     }
 
+    /// Every saved favorite; empty when none.
+    func allFavorites() -> [Route] {
+        loadFavorites() ?? []
+    }
+
     /// Records a completed run of a favorited route: bumps its run count and
     /// slots the time into the route's top three if it qualifies.
     func recordRun(routeID: UUID, time: TimeInterval) {

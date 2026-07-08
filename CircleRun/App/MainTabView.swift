@@ -10,6 +10,15 @@ import SwiftUI
 struct MainTabView: View {
     @State private var selectedTab: Int = 0
 
+    init() {
+        // Night Circuit chrome: near-black bar, comet-cyan selection.
+        let appearance = UITabBarAppearance()
+        appearance.configureWithOpaqueBackground()
+        appearance.backgroundColor = UIColor(red: 0.039, green: 0.055, blue: 0.078, alpha: 1)
+        UITabBar.appearance().standardAppearance = appearance
+        UITabBar.appearance().scrollEdgeAppearance = appearance
+    }
+
     var body: some View {
         TabView(selection: $selectedTab) {
             // Map tab
@@ -40,7 +49,8 @@ struct MainTabView: View {
                 }
                 .tag(3)
         }
-        .accentColor(.blue)
+        .accentColor(Night.cyan)
+        .preferredColorScheme(.dark)
         .onChange(of: selectedTab) { _ in
             Haptics.selection()
         }

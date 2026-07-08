@@ -9,7 +9,7 @@ struct FavoritesView: View {
         NavigationStack {
             ZStack {
                 // Background
-                Color(.systemGroupedBackground)
+                Night.ground
                     .edgesIgnoringSafeArea(.all)
                 
                 // Content
@@ -19,16 +19,20 @@ struct FavoritesView: View {
                     emptyStateView
                 } else {
                     ScrollView {
-                        LazyVStack(spacing: 12) {
-                            ForEach(viewModel.favorites) { route in
+                        LazyVStack(spacing: 10) {
+                            ForEach(Array(viewModel.favorites.enumerated()), id: \.element.id) { index, route in
                                 RouteCardView(route: route, viewModel: viewModel)
+                                    .staggeredAppear(index: index)
                             }
                         }
+                        .padding(.horizontal, 16)
                         .padding(.vertical, 8)
                     }
                 }
             }
             .navigationTitle("Favorites")
+            .toolbarBackground(Night.ground, for: .navigationBar)
+            .preferredColorScheme(.dark)
             .refreshable {
                 viewModel.loadFavorites()
             }
@@ -36,20 +40,20 @@ struct FavoritesView: View {
     }
     
     private var emptyStateView: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "star.slash")
-                .font(.system(size: 60))
-                .foregroundColor(.secondary)
-            
+        VStack(spacing: 18) {
+            NeonTraceView(coordinates: Route.sample().path, color: Night.gold, lineWidth: 2.4)
+                .frame(width: 110, height: 110)
+                .opacity(0.9)
+
             Text("No Favorite Routes")
-                .font(.title2)
-                .fontWeight(.semibold)
-            
-            Text("Star a route to add it to your favorites")
-                .font(.body)
-                .foregroundColor(.secondary)
+                .font(.system(size: 22, weight: .heavy, design: .rounded))
+                .foregroundColor(Night.text)
+
+            Text("Star a loop you love and it lives here, keeping your best times.")
+                .font(.system(size: 14))
+                .foregroundColor(Night.dim)
                 .multilineTextAlignment(.center)
-                .padding(.horizontal, 32)
+                .padding(.horizontal, 44)
         }
     }
 }
