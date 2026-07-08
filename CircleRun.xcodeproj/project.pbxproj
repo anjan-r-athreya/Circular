@@ -529,7 +529,8 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = CircleRun/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Circular;
-				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Health Updates Access";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "Shows heart rate and calories from your Apple Watch on run details";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Saves your runs to Apple Health as workouts";
 				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "Show the real time user location";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Real Time User Location Updates";
 				INFOPLIST_KEY_NSMotionUsageDescription = "Get physical activity data";
@@ -566,7 +567,8 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = CircleRun/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Circular;
-				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Health Updates Access";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "Shows heart rate and calories from your Apple Watch on run details";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Saves your runs to Apple Health as workouts";
 				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "Show the real time user location";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Real Time User Location Updates";
 				INFOPLIST_KEY_NSMotionUsageDescription = "Get physical activity data";

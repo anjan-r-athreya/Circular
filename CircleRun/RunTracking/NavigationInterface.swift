@@ -201,13 +201,17 @@ struct NavigationInterface: View {
     /// route was actually covered.
     private func saveRun() {
         guard let summary else { return }
+        let trace = navigationManager.recordedPath
+        let splits = navigationManager.mileSplitSeconds
         RunStore.shared.record(RunRecord(
             id: UUID(),
             date: Date(),
             routeName: route.name,
             routeID: route.id,
             miles: summary.miles,
-            seconds: summary.seconds
+            seconds: summary.seconds,
+            path: trace.count > 1 ? trace.map(RoutePoint.init) : nil,
+            mileSplitSeconds: splits.isEmpty ? nil : splits
         ))
         if summary.completedRoute {
             RouteManager.shared.recordRun(routeID: route.id, time: summary.seconds)

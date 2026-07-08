@@ -25,7 +25,9 @@ struct ActivityView: View {
 
                         Section("Runs") {
                             ForEach(store.runs) { run in
-                                runRow(run)
+                                NavigationLink(destination: RunDetailView(run: run)) {
+                                    runRow(run)
+                                }
                             }
                             .onDelete { offsets in
                                 offsets.map { store.runs[$0] }.forEach(store.delete)

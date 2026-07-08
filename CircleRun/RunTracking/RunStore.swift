@@ -8,6 +8,22 @@
 //
 
 import Foundation
+import CoreLocation
+
+/// Compact codable coordinate for stored run traces.
+struct RoutePoint: Codable, Hashable {
+    let lat: Double
+    let lng: Double
+
+    init(_ coordinate: CLLocationCoordinate2D) {
+        lat = coordinate.latitude
+        lng = coordinate.longitude
+    }
+
+    var coordinate: CLLocationCoordinate2D {
+        CLLocationCoordinate2D(latitude: lat, longitude: lng)
+    }
+}
 
 struct RunRecord: Identifiable, Codable {
     let id: UUID
@@ -17,6 +33,39 @@ struct RunRecord: Identifiable, Codable {
     let routeID: UUID?
     let miles: Double
     let seconds: TimeInterval
+
+    // Detail payload — optional so pre-existing saves keep decoding.
+    /// Thinned GPS breadcrumbs actually run (not the planned route).
+    var path: [RoutePoint]?
+    /// Duration of each completed whole mile.
+    var mileSplitSeconds: [Double]?
+    /// Watch metrics; nil means "ask HealthKit when the detail opens".
+    var avgHeartRate: Double?
+    var maxHeartRate: Double?
+    var heartRateSeries: [Double]?
+    var calories: Double?
+
+    init(id: UUID, date: Date, routeName: String, routeID: UUID?,
+         miles: Double, seconds: TimeInterval,
+         path: [RoutePoint]? = nil,
+         mileSplitSeconds: [Double]? = nil,
+         avgHeartRate: Double? = nil,
+         maxHeartRate: Double? = nil,
+         heartRateSeries: [Double]? = nil,
+         calories: Double? = nil) {
+        self.id = id
+        self.date = date
+        self.routeName = routeName
+        self.routeID = routeID
+        self.miles = miles
+        self.seconds = seconds
+        self.path = path
+        self.mileSplitSeconds = mileSplitSeconds
+        self.avgHeartRate = avgHeartRate
+        self.maxHeartRate = maxHeartRate
+        self.heartRateSeries = heartRateSeries
+        self.calories = calories
+    }
 
     var paceSecondsPerMile: Double {
         miles > 0.05 ? seconds / miles : 0
@@ -101,8 +150,10 @@ final class RunStore: ObservableObject {
 // Dev-build helpers so the Activity tab can be exercised before any real
 // runs exist. Not compiled into release builds.
 extension RunStore {
-    /// Replaces history with a few weeks of plausible runs, including a
-    /// four-day streak ending today.
+    /// Replaces history with a few weeks of plausible runs — including a
+    /// four-day streak ending today — each carrying the full detail
+    /// payload (GPS trace, mile splits, heart rate, calories) so the run
+    /// detail screen can be previewed end to end.
     func seedSampleData() {
         let calendar = Calendar.current
         let now = Date()
@@ -121,13 +172,49 @@ extension RunStore {
             let date = calendar.date(bySettingHour: i % 2 == 0 ? 7 : 18,
                                      minute: (i * 13) % 60,
                                      second: 0, of: day) ?? day
+            let paceSeconds = entry.2 * 60
+
+            // Wobbly loop around a per-run center, sized to the distance.
+            let center = CLLocationCoordinate2D(latitude: 37.7749 + Double(i) * 0.004,
+                                                longitude: -122.4194 - Double(i) * 0.003)
+            let radiusDegrees = entry.1 * 1609.34 / (2 * .pi) / 111_000
+            let path = (0...72).map { step -> RoutePoint in
+                let angle = 2 * Double.pi * Double(step) / 72
+                let wobble = 1 + 0.12 * sin(angle * 3 + Double(i))
+                return RoutePoint(CLLocationCoordinate2D(
+                    latitude: center.latitude + radiusDegrees * wobble * cos(angle),
+                    longitude: center.longitude + radiusDegrees * wobble * sin(angle) /
+                        cos(center.latitude * .pi / 180)
+                ))
+            }
+
+            // Splits that drift around the average pace.
+            let wholeMiles = Int(entry.1)
+            let splits: [Double]? = wholeMiles >= 1 ? (1...wholeMiles).map { mile in
+                paceSeconds + 22 * sin(Double(mile) * 1.7 + Double(i))
+            } : nil
+
+            // A believable heart-rate arc: ramp up, cruise, surge at the end.
+            let avgHR = 142.0 + Double(i % 5) * 4
+            let series = (0..<40).map { step -> Double in
+                let t = Double(step) / 39
+                let ramp = min(1, t * 4)
+                return avgHR - 18 + 22 * ramp + 7 * sin(t * 9 + Double(i)) + (t > 0.85 ? 9 : 0)
+            }
+
             sample.append(RunRecord(
                 id: UUID(),
                 date: min(date, now),
                 routeName: routeNames[i % routeNames.count],
                 routeID: nil,
                 miles: entry.1,
-                seconds: entry.1 * entry.2 * 60
+                seconds: entry.1 * paceSeconds,
+                path: path,
+                mileSplitSeconds: splits,
+                avgHeartRate: avgHR,
+                maxHeartRate: series.max(),
+                heartRateSeries: series,
+                calories: entry.1 * 102
             ))
         }
 

@@ -58,6 +58,12 @@ class RouteManager {
         NotificationCenter.default.post(name: Notification.Name("FavoritesUpdated"), object: nil)
     }
     
+    /// The favorite with this ID, if it's still saved — used by run details
+    /// to badge a standing best time.
+    func favorite(withID id: UUID) -> Route? {
+        loadFavorites()?.first { $0.id == id }
+    }
+
     /// Records a completed run of a favorited route: bumps its run count and
     /// slots the time into the route's top three if it qualifies.
     func recordRun(routeID: UUID, time: TimeInterval) {

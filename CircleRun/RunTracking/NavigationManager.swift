@@ -62,6 +62,13 @@ class NavigationManager: NSObject, ObservableObject {
     private var averagePace: TimeInterval = 0  // seconds per mile
     /// Whole miles already announced, so each split fires exactly once.
     private var announcedMiles = 0
+    /// GPS breadcrumbs of the path actually run, thinned to ~20m spacing —
+    /// saved with the run so the detail screen can map the real trace.
+    private(set) var recordedPath: [CLLocationCoordinate2D] = []
+    /// Duration of each completed whole mile.
+    private(set) var mileSplitSeconds: [Double] = []
+    private var lastSplitElapsed: TimeInterval = 0
+    private let breadcrumbSpacing: CLLocationDistance = 20
     /// Kept alive for the duration of an utterance — a local synthesizer can
     /// deallocate mid-sentence.
     private let speechSynthesizer = AVSpeechSynthesizer()
@@ -215,6 +222,9 @@ class NavigationManager: NSObject, ObservableObject {
         startTime = nil
         accumulatedTime = 0
         announcedMiles = 0
+        recordedPath = []
+        mileSplitSeconds = []
+        lastSplitElapsed = 0
         lastLocation = nil
     }
 
@@ -466,14 +476,31 @@ extension NavigationManager: CLLocationManagerDelegate {
                 runningStats.remainingDistance = String(format: "%.1f mi", max(0, remainingMiles))
             }
 
-            // Mile split: announce each whole mile exactly once.
+            // Mile split: announce each whole mile exactly once, banking
+            // its duration for the run detail screen.
             let wholeMiles = Int(distanceTraveled / 1609.34)
             if wholeMiles > announcedMiles {
                 announcedMiles = wholeMiles
+                mileSplitSeconds.append(elapsedSeconds - lastSplitElapsed)
+                lastSplitElapsed = elapsedSeconds
                 announceMileSplit(mile: wholeMiles)
             }
         }
         lastLocation = location
+
+        // Breadcrumb trail, thinned so week-long histories stay storable.
+        if let lastCrumb = recordedPath.last {
+            let crumbLocation = CLLocation(latitude: lastCrumb.latitude,
+                                           longitude: lastCrumb.longitude)
+            if location.distance(from: crumbLocation) >= breadcrumbSpacing {
+                recordedPath.append(location.coordinate)
+            }
+        } else {
+            recordedPath.append(location.coordinate)
+        }
+        if recordedPath.count > 4000 {
+            recordedPath = stride(from: 0, to: recordedPath.count, by: 2).map { recordedPath[$0] }
+        }
         
         // Update camera and next turn
         updateCamera(for: location)
