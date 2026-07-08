@@ -89,16 +89,25 @@ struct MapboxMapView: View {
             
             if viewModel.showingSuggestions {
                 suggestionsOverlay
+                    .transition(.riseIn)
             }
 
             if viewModel.isGeneratingRoute {
-                loadingOverlay(viewModel.generationStatus.isEmpty
-                               ? MapboxMapInterface.Text.generatingRoute
-                               : viewModel.generationStatus)
+                GenerationLoadingView(message: viewModel.generationStatus.isEmpty
+                                      ? MapboxMapInterface.Text.generatingRoute
+                                      : viewModel.generationStatus)
+                    .transition(.opacity)
             } else if viewModel.isLoadingSpots {
-                loadingOverlay(MapboxMapInterface.Text.scenicSpotsLoading)
+                GenerationLoadingView(message: MapboxMapInterface.Text.scenicSpotsLoading)
+                    .transition(.opacity)
             }
         }
+        .animation(.themeEntrance, value: viewModel.showingSuggestions)
+        .animation(.themeEntrance, value: viewModel.isGeneratingRoute)
+        .animation(.themeEntrance, value: viewModel.isLoadingSpots)
+        // Every button on this screen (sheets included) presses with the
+        // same springy shrink — buttonStyle rides the environment down.
+        .buttonStyle(ThemeButtonStyle())
         .sheet(isPresented: $showingLoopGenerator) {
             loopGeneratorSheet
         }
@@ -359,6 +368,7 @@ struct MapboxMapView: View {
         VStack(spacing: 0) {
             if !viewModel.routeCoordinates.isEmpty {
                 routeInfoCard
+                    .transition(.riseIn)
             }
             
             HStack {
@@ -577,38 +587,6 @@ struct MapboxMapView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private func loadingOverlay(_ message: String) -> some View {
-        ZStack {
-            MapboxMapInterface.Colors.overlay
-
-            VStack(spacing: MapboxMapInterface.Layout.spacing.medium) {
-                ProgressView()
-                    .scaleEffect(MapboxMapInterface.Layout.size.loadingIndicator)
-                    .tint(MapboxMapInterface.Colors.primary)
-
-                Text(message)
-                    .font(MapboxMapInterface.Typography.headline)
-                    .foregroundColor(MapboxMapInterface.Colors.text)
-            }
-            .padding()
-            .background(
-                MapboxMapInterface.Colors.controlBackground
-                    .overlay(
-                        RoundedRectangle(cornerRadius: MapboxMapInterface.Layout.cornerRadius.medium)
-                            .stroke(MapboxMapInterface.Colors.primary.opacity(0.3), lineWidth: 1)
-                    )
-            )
-            .cornerRadius(MapboxMapInterface.Layout.cornerRadius.medium)
-            .shadow(
-                color: MapboxMapInterface.Shadows.glow.color,
-                radius: MapboxMapInterface.Shadows.glow.radius,
-                x: MapboxMapInterface.Shadows.glow.x,
-                y: MapboxMapInterface.Shadows.glow.y
-            )
-        }
-        .ignoresSafeArea()
-    }
-    
     private var loopGeneratorSheet: some View {
         NavigationStack {
             VStack(spacing: MapboxMapInterface.Layout.spacing.large) {
@@ -625,9 +603,11 @@ struct MapboxMapView: View {
                     .accentColor(MapboxMapInterface.Colors.primary)
 
                     Text(String(format: "%.1f mi", targetMiles))
-                        .font(MapboxMapInterface.Typography.body)
+                        .font(MapboxMapInterface.Typography.body.monospacedDigit())
                         .foregroundColor(MapboxMapInterface.Colors.secondaryText)
                         .frame(width: 60)
+                        .contentTransition(.numericText(value: targetMiles))
+                        .animation(.themeSnappy, value: targetMiles)
                 }
                 .padding(.horizontal)
 
@@ -686,13 +666,14 @@ struct MapboxMapView: View {
 
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: MapboxMapInterface.Layout.spacing.medium) {
-                        ForEach(viewModel.scenicSpots) { spot in
+                        ForEach(Array(viewModel.scenicSpots.enumerated()), id: \.element.id) { index, spot in
                             ScenicSpotCardView(
                                 spot: spot,
                                 isSelected: viewModel.selectedSpotIDs.contains(spot.id)
                             ) {
                                 viewModel.toggleSpot(spot)
                             }
+                            .staggeredAppear(index: index)
                         }
                     }
                     .padding(.horizontal)
