@@ -22,6 +22,11 @@ class MapboxViewModel: ObservableObject {
     /// Smoothed elevation samples for the displayed route; empty until fetched.
     @Published var routeElevations: [Double] = []
     @Published var errorMessage: String?
+    /// Headline for the failure alert — names the class of problem
+    /// (offline, no roads, service busy) instead of a generic "Error".
+    @Published var errorTitle: String = "No Loop Found"
+    /// Whether the alert should offer Try Again (pointless for bad input).
+    @Published var canRetryGeneration: Bool = true
     @Published var isFavorited: Bool = false
     
     @Published var scenicSpots: [ScenicSpot] = []
@@ -51,7 +56,7 @@ class MapboxViewModel: ObservableObject {
 
     func generateLoop(targetMiles: Double) {
         guard let location = generationStart else {
-            errorMessage = "Current location not available"
+            presentError(LoopGenerationError.locationUnavailable, hadSpots: false)
             return
         }
 
@@ -83,12 +88,7 @@ class MapboxViewModel: ObservableObject {
 
             switch result {
             case .failure(let error):
-                var message = error.localizedDescription
-                if case LoopGenerationError.distanceNotAchievable = error, !includedSpots.isEmpty {
-                    message += " Removing a scenic stop may also help."
-                }
-                self.errorMessage = message
-                Haptics.error()
+                self.presentError(error, hadSpots: !includedSpots.isEmpty)
 
             case .success(let loop):
                 Haptics.success()
@@ -111,6 +111,26 @@ class MapboxViewModel: ObservableObject {
         generateLoop(targetMiles: miles)
     }
 
+    /// Turns any generation failure into an honest alert: what went wrong
+    /// in the headline, why in the body, what to do about it underneath.
+    private func presentError(_ error: Error, hadSpots: Bool) {
+        let loopError = error as? LoopGenerationError
+        if case .cancelled = loopError { return }
+
+        var message = error.localizedDescription
+        if case .distanceNotAchievable = loopError, hadSpots {
+            message += " Removing a scenic stop may also help."
+        }
+        if let suggestion = (error as? LocalizedError)?.recoverySuggestion {
+            message += "\n\n" + suggestion
+        }
+
+        errorTitle = loopError?.alertTitle ?? "No Loop Found"
+        canRetryGeneration = loopError?.isRetryable ?? true
+        errorMessage = message
+        Haptics.error()
+    }
+
     // MARK: - Scenic Spots
 
     /// Step one of generation: look for scenic spots near the runner and, if
@@ -118,7 +138,7 @@ class MapboxViewModel: ObservableObject {
     /// Falls straight through to generation when nothing interesting is nearby.
     func beginGenerationFlow(targetMiles: Double) {
         guard let location = generationStart else {
-            errorMessage = "Current location not available"
+            presentError(LoopGenerationError.locationUnavailable, hadSpots: false)
             return
         }
 

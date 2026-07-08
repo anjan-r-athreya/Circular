@@ -140,11 +140,12 @@ struct MapboxMapView: View {
                 try? await Task.sleep(nanoseconds: 1_000_000_000)
             }
         }
-        .alert(MapboxMapInterface.Text.generationFailedTitle,
+        .alert(viewModel.errorTitle,
                isPresented: .constant(viewModel.errorMessage != nil)) {
             // A different direction often succeeds where the last one failed,
-            // so offer the retry right in the alert.
-            if viewModel.lastTargetMiles != nil {
+            // so offer the retry right in the alert — but only when a retry
+            // can actually help (never for bad input or missing setup).
+            if viewModel.canRetryGeneration, viewModel.lastTargetMiles != nil {
                 Button(MapboxMapInterface.Text.tryAgainButton) {
                     viewModel.errorMessage = nil
                     viewModel.regenerateLoop()
@@ -250,6 +251,8 @@ struct MapboxMapView: View {
                 isSearchingLocation = false
                 guard let coordinate = response?.mapItems.first?.placemark.coordinate else {
                     Haptics.error()
+                    viewModel.errorTitle = "Place Not Found"
+                    viewModel.canRetryGeneration = false
                     viewModel.errorMessage = "Couldn't find \"\(query)\" — try a fuller address or a nearby landmark."
                     return
                 }

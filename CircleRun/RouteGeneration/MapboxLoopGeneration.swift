@@ -79,19 +79,114 @@ struct LoopPreferences {
     }
 }
 
+/// Every way generation can fail, each with a plain-English explanation,
+/// a recovery suggestion, an alert title, and whether retrying can help.
+/// The generator diagnoses WHICH of these happened from its request log
+/// instead of collapsing everything into "no route found".
 enum LoopGenerationError: LocalizedError {
-    case noRouteFound
+    case offline
+    case locationUnavailable
+    case invalidStartLocation
+    case distanceTooShort(minMiles: Double)
+    case distanceTooLong(maxMiles: Double)
+    case serviceMisconfigured
+    case serviceBusy
+    case serviceError
+    case noRoadsNearby
     case distanceNotAchievable(targetMiles: Double, closestMiles: Double)
+    case timedOut
+    case noRouteFound
     case cancelled
 
     var errorDescription: String? {
         switch self {
-        case .noRouteFound:
-            return "Couldn't find a runnable loop near you. The road network here may not support a loop this size — try a shorter distance."
+        case .offline:
+            return "You're offline. Building a loop needs a connection to the routing service."
+        case .locationUnavailable:
+            return "Your location isn't available yet."
+        case .invalidStartLocation:
+            return "That start point isn't a usable location."
+        case .distanceTooShort(let min):
+            return String(format: "Loops under %.1f miles are too short to route reliably.", min)
+        case .distanceTooLong(let max):
+            return String(format: "That's beyond the %.0f-mile ceiling for a single loop.", max)
+        case .serviceMisconfigured:
+            return "The Mapbox access token is missing, so routing can't run."
+        case .serviceBusy:
+            return "The routing service is rate-limiting requests right now."
+        case .serviceError:
+            return "The routing service rejected the requests."
+        case .noRoadsNearby:
+            return "No runnable roads or paths were found around this start point — it may be over water, private land, or far from a mapped road."
         case .distanceNotAchievable(let target, let closest):
-            return String(format: "Couldn't build a %.1f-mile loop here — the closest runnable loop was %.1f miles. Try shuffling again or adjusting the distance.", target, closest)
+            return String(format: "Couldn't build a %.1f-mile loop here — the closest runnable loop was %.1f miles.", target, closest)
+        case .timedOut:
+            return "Route generation took too long and was stopped."
+        case .noRouteFound:
+            return "Couldn't find a runnable loop near you. The road network here may not support a loop this size."
         case .cancelled:
             return "Route generation was cancelled."
+        }
+    }
+
+    var recoverySuggestion: String? {
+        switch self {
+        case .offline:
+            return "Check Wi-Fi or cellular and try again."
+        case .locationUnavailable:
+            return "Give the app a moment to find you, check Location permissions in Settings, or long-press the map to pick a start point."
+        case .invalidStartLocation:
+            return "Clear the start pin and drop it on a street or path."
+        case .distanceTooShort:
+            return "Pull the distance slider up a little."
+        case .distanceTooLong:
+            return "Choose a shorter distance."
+        case .serviceMisconfigured:
+            return "Copy Config/Secrets.example.xcconfig to Config/Secrets.xcconfig and add a Mapbox token, then rebuild."
+        case .serviceBusy:
+            return "Wait a minute and try again."
+        case .serviceError:
+            return "Try again in a bit. If it keeps happening, the Mapbox token may be invalid or out of quota."
+        case .noRoadsNearby:
+            return "Move the start pin closer to a street, or clear it to start from your location."
+        case .distanceNotAchievable:
+            return "Shuffle for a different direction, or adjust the distance."
+        case .timedOut:
+            return "Try again — the network may just be slow."
+        case .noRouteFound:
+            return "Try a shorter distance or a different start point."
+        case .cancelled:
+            return nil
+        }
+    }
+
+    /// Short, honest alert titles so the headline already says what class
+    /// of problem this is.
+    var alertTitle: String {
+        switch self {
+        case .offline: return "You're Offline"
+        case .locationUnavailable: return "Location Not Ready"
+        case .invalidStartLocation: return "Bad Start Point"
+        case .distanceTooShort, .distanceTooLong: return "Distance Out of Range"
+        case .serviceMisconfigured: return "Setup Needed"
+        case .serviceBusy: return "Routing Service Busy"
+        case .serviceError: return "Routing Service Error"
+        case .noRoadsNearby: return "No Runnable Roads Here"
+        case .timedOut: return "Taking Too Long"
+        case .distanceNotAchievable, .noRouteFound: return "No Loop Found"
+        case .cancelled: return "Cancelled"
+        }
+    }
+
+    /// Whether an immediate retry has a realistic chance of succeeding.
+    var isRetryable: Bool {
+        switch self {
+        case .offline, .serviceBusy, .serviceError, .timedOut,
+             .distanceNotAchievable, .noRouteFound, .locationUnavailable:
+            return true
+        case .invalidStartLocation, .distanceTooShort, .distanceTooLong,
+             .serviceMisconfigured, .noRoadsNearby, .cancelled:
+            return false
         }
     }
 }
@@ -143,9 +238,81 @@ final class MapboxLoopGenerator {
 
     var configuration = Configuration()
 
+    /// Hard ceiling on one generation's wall-clock time.
+    private let generationTimeLimit: TimeInterval = 60
+    private let minTargetMiles = 0.5
+    private let maxTargetMiles = 100.0
+
     private var generationTask: Task<Void, Never>?
 
     private init() {}
+
+    // MARK: - Failure accounting
+
+    /// What each Directions request did, tallied across a generation so a
+    /// total failure can be diagnosed honestly instead of guessed at.
+    private final class Diagnostics {
+        var routesReturned = 0      // API answered with a usable route
+        var routingFailures = 0     // API answered: no route through these points
+        var networkFailures = 0
+        var rateLimited = 0
+        var apiErrors = 0           // auth / quota / malformed
+    }
+
+    private enum RequestFailure {
+        case network, rateLimited, api, noRoute
+    }
+
+    private func classify(_ error: Error) -> RequestFailure {
+        if error is URLError { return .network }
+        if let directionsError = error as? DirectionsError {
+            switch directionsError {
+            case .network: return .network
+            case .rateLimited: return .rateLimited
+            case .unableToRoute, .noMatches: return .noRoute
+            default: return .api
+            }
+        }
+        return .api
+    }
+
+    /// The honest story of why nothing came back, from the request tally.
+    private func diagnoseTotalFailure(_ diagnostics: Diagnostics,
+                                      deadline: Date) -> LoopGenerationError {
+        if !NetworkMonitor.shared.isOnline { return .offline }
+        if diagnostics.networkFailures > 0 && diagnostics.routesReturned == 0
+            && diagnostics.routingFailures == 0 {
+            return .offline
+        }
+        if diagnostics.rateLimited > 0 { return .serviceBusy }
+        if diagnostics.apiErrors > 0 && diagnostics.routesReturned == 0
+            && diagnostics.routingFailures == 0 {
+            return .serviceError
+        }
+        if Date() >= deadline && diagnostics.routesReturned == 0 { return .timedOut }
+        if diagnostics.routesReturned == 0 { return .noRoadsNearby }
+        return .noRouteFound
+    }
+
+    /// Cheap sanity checks before any API budget is spent.
+    private func preflight(start: CLLocationCoordinate2D, targetMiles: Double) throws {
+        guard CLLocationCoordinate2DIsValid(start),
+              abs(start.latitude) > 0.0001 || abs(start.longitude) > 0.0001 else {
+            throw LoopGenerationError.invalidStartLocation
+        }
+        guard targetMiles >= minTargetMiles else {
+            throw LoopGenerationError.distanceTooShort(minMiles: minTargetMiles)
+        }
+        guard targetMiles <= maxTargetMiles else {
+            throw LoopGenerationError.distanceTooLong(maxMiles: maxTargetMiles)
+        }
+        guard !MapboxConfig.accessToken.isEmpty else {
+            throw LoopGenerationError.serviceMisconfigured
+        }
+        guard NetworkMonitor.shared.isOnline else {
+            throw LoopGenerationError.offline
+        }
+    }
 
     // MARK: - Public API
 
@@ -161,6 +328,7 @@ final class MapboxLoopGenerator {
         let targetMeters = targetMiles * 1609.34
         generationTask = Task {
             do {
+                try self.preflight(start: start, targetMiles: targetMiles)
                 let loop = try await self.findBestLoop(from: start,
                                                        targetMeters: targetMeters,
                                                        preferences: preferences,
@@ -227,6 +395,8 @@ final class MapboxLoopGenerator {
         }
 
         let config = configuration
+        let diagnostics = Diagnostics()
+        let deadline = Date().addingTimeInterval(generationTimeLimit)
 
         // With a heading preference, cluster candidate directions around it;
         // otherwise spread them evenly from a random base so shuffling varies.
@@ -240,7 +410,7 @@ final class MapboxLoopGenerator {
 
         for (index, offset) in offsets.prefix(config.maxBearings).enumerated() {
             try Task.checkCancellation()
-            guard budget > 0 else { break }
+            guard budget > 0, Date() < deadline else { break }
 
             // Extra bearings beyond the first round only run while nothing is on target.
             if index >= config.initialBearings,
@@ -258,7 +428,9 @@ final class MapboxLoopGenerator {
                 targetMeters: targetMeters,
                 preferences: preferences,
                 label: "bearing \(Int(bearing))°",
-                progress: progress
+                progress: progress,
+                diagnostics: diagnostics,
+                deadline: deadline
             ) { radius in
                 self.circleWaypoints(from: start, bearing: bearing, clockwise: clockwise, radius: radius)
             }
@@ -275,7 +447,9 @@ final class MapboxLoopGenerator {
             }
         }
 
-        guard let winner = best else { throw LoopGenerationError.noRouteFound }
+        guard let winner = best else {
+            throw diagnoseTotalFailure(diagnostics, deadline: deadline)
+        }
 
         // Never hand back a route wildly off the requested distance (this is what
         // used to produce 7-mile "20-mile" loops) — fail with the details instead.
@@ -304,13 +478,15 @@ final class MapboxLoopGenerator {
                                   spots: [CLLocationCoordinate2D],
                                   progress: (@MainActor (String) -> Void)? = nil) async throws -> GeneratedLoop {
         let config = configuration
+        let diagnostics = Diagnostics()
+        let deadline = Date().addingTimeInterval(generationTimeLimit)
         var best: Candidate?
         var budget = config.totalRequestBudget
 
         await report(progress, "Weaving in your scenic stops…")
         for clockwise in [true, false].shuffled() {
             try Task.checkCancellation()
-            guard budget > 0 else { break }
+            guard budget > 0, Date() < deadline else { break }
 
             let allowed = min(config.maxRequestsPerSpotDirection, budget)
             let (candidate, used) = await calibrate(
@@ -319,7 +495,9 @@ final class MapboxLoopGenerator {
                 targetMeters: targetMeters,
                 preferences: preferences,
                 label: clockwise ? "spots cw" : "spots ccw",
-                progress: progress
+                progress: progress,
+                diagnostics: diagnostics,
+                deadline: deadline
             ) { scale in
                 self.spotWaypoints(from: start, spots: spots, clockwise: clockwise,
                                    fillerScale: scale, targetMeters: targetMeters)
@@ -336,7 +514,9 @@ final class MapboxLoopGenerator {
             }
         }
 
-        guard let winner = best else { throw LoopGenerationError.noRouteFound }
+        guard let winner = best else {
+            throw diagnoseTotalFailure(diagnostics, deadline: deadline)
+        }
         guard winner.relativeError <= config.maxRelativeError else {
             throw LoopGenerationError.distanceNotAchievable(
                 targetMiles: targetMeters / 1609.34,
@@ -358,24 +538,41 @@ final class MapboxLoopGenerator {
                            preferences: LoopPreferences,
                            label: String,
                            progress: (@MainActor (String) -> Void)? = nil,
+                           diagnostics: Diagnostics,
+                           deadline: Date,
                            makeWaypoints: (Double) -> [Waypoint]) async -> (Candidate?, Int) {
         let config = configuration
         var parameter = initialParameter
         var best: Candidate?
         var used = 0
 
-        while used < allowance {
+        while used < allowance, Date() < deadline {
             if Task.isCancelled { return (best, used) }
             used += 1
             if used > 1 {
                 await report(progress, "Dialing in the distance…")
             }
 
-            guard let loop = await requestRoute(waypoints: makeWaypoints(parameter),
-                                                preferences: preferences,
-                                                label: label) else {
-                // Routing failed (waypoint in water, no roads); shrink and retry.
-                parameter *= config.failureShrinkFactor
+            let outcome = await requestRoute(waypoints: makeWaypoints(parameter),
+                                             preferences: preferences,
+                                             label: label,
+                                             diagnostics: diagnostics)
+            guard let loop = outcome.loop else {
+                switch outcome.failure {
+                case .noRoute, .none:
+                    // Waypoint in water / off the road grid; shrink and retry.
+                    parameter *= config.failureShrinkFactor
+                case .network:
+                    // Transient blip gets one breather; a dead connection
+                    // stops this direction rather than burning the budget.
+                    if !NetworkMonitor.shared.isOnline { return (best, used) }
+                    try? await Task.sleep(nanoseconds: 600_000_000)
+                case .rateLimited:
+                    try? await Task.sleep(nanoseconds: 1_500_000_000)
+                case .api:
+                    // Auth/quota problems won't fix themselves mid-run.
+                    return (best, used)
+                }
                 continue
             }
 
@@ -511,7 +708,8 @@ final class MapboxLoopGenerator {
 
     private func requestRoute(waypoints: [Waypoint],
                               preferences: LoopPreferences,
-                              label: String) async -> GeneratedLoop? {
+                              label: String,
+                              diagnostics: Diagnostics) async -> (loop: GeneratedLoop?, failure: RequestFailure?) {
         let options = RouteOptions(waypoints: waypoints, profileIdentifier: .walking)
         options.routeShapeResolution = .full
         options.shapeFormat = .polyline6
@@ -528,20 +726,29 @@ final class MapboxLoopGenerator {
             let response = try await calculate(options)
             guard let route = response.routes?.first,
                   let coordinates = route.shape?.coordinates,
-                  coordinates.count > 1 else { return nil }
+                  coordinates.count > 1 else {
+                diagnostics.routingFailures += 1
+                return (nil, .noRoute)
+            }
 
             // Walking routes can still board ferries; those are never runnable loops.
             let usesFerry = route.legs.contains { leg in
                 leg.steps.contains { $0.transportType == .ferry }
             }
-            if usesFerry { return nil }
+            if usesFerry {
+                diagnostics.routingFailures += 1
+                return (nil, .noRoute)
+            }
 
             // Cut dead-end spurs out of the polyline before scoring. The
             // distance drops accordingly, and calibration then grows the loop
             // back to the target with the spur mileage gone.
             let cleaned = excisingSpurs(coordinates)
             let cleanedDistance = pathLength(cleaned)
-            guard cleanedDistance > 0 else { return nil }
+            guard cleanedDistance > 0 else {
+                diagnostics.routingFailures += 1
+                return (nil, .noRoute)
+            }
             if cleanedDistance < route.distance * 0.98 {
                 print("\(label): excised \(Int(route.distance - cleanedDistance))m of dead ends")
             }
@@ -553,14 +760,23 @@ final class MapboxLoopGenerator {
                 gain = await ElevationService.shared.gainMeters(for: cleaned)
             }
 
-            return GeneratedLoop(coordinates: cleaned,
-                                 distanceMeters: cleanedDistance,
-                                 expectedTravelTime: route.expectedTravelTime * (cleanedDistance / route.distance),
-                                 overlapRatio: overlapRatio(of: cleaned),
-                                 elevationGainMeters: gain)
+            diagnostics.routesReturned += 1
+            let loop = GeneratedLoop(coordinates: cleaned,
+                                     distanceMeters: cleanedDistance,
+                                     expectedTravelTime: route.expectedTravelTime * (cleanedDistance / route.distance),
+                                     overlapRatio: overlapRatio(of: cleaned),
+                                     elevationGainMeters: gain)
+            return (loop, nil)
         } catch {
-            print("Routing error (\(label)): \(error.localizedDescription)")
-            return nil
+            let failure = classify(error)
+            switch failure {
+            case .network: diagnostics.networkFailures += 1
+            case .rateLimited: diagnostics.rateLimited += 1
+            case .api: diagnostics.apiErrors += 1
+            case .noRoute: diagnostics.routingFailures += 1
+            }
+            print("Routing error (\(label), \(failure)): \(error.localizedDescription)")
+            return (nil, failure)
         }
     }
 
